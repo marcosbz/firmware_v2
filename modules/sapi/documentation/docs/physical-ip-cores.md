@@ -133,6 +133,107 @@ Alias de ``gpioGetValue();``
 
 Alias de ``gpioSetValue();``
 
+
+
+
+## UART
+
+Modela periférico de comunicación UART (transmisor/receptor asincrónico universal), coumnmente llamado *puerto serie*.
+
+
+### Propiedades de UART
+
+- Propiedades de configuración:
+    - ``baudRate``
+    - ``dataBits``
+    - ``stopBits``
+    - ``parity``
+    - ``power``
+- Propiedades de valor:
+    - ``txValue``
+    - ``rxValue``
+- Propiedades de eventos:
+    - ``receiveByteEvent``
+    - ``receiveByteEventCallback``
+    - ``transmiterFreeEvent``
+    - ``transmiterFreeEventCallback``
+
+Valores posibles:
+
+- baudRate: ``1200``, ``2400``, ``4800``, ``9600``, ``19200``, ``38400``, ``57600`` o ``115200``.
+- dataBits: ``5`` (o ``0``), ``6``, ``7``, ``8`` o ``9``.
+- stopBits: ``1`` (o ``0``) o ``2``.
+- parity: ``UART_PARITY_NONE`` (o ``0``), ``UART_PARITY_ODD`` (o ``1``)  o ``UART_PARITY_EVEN`` (o ``2``) .
+
+- power: ``ON``, ``OFF``, ``ENABLE`` o ``DISABLE``
+
+- txValue: Un valor del tipo ``uint8_t``.
+- rxValue: {solo lectura} devuelve un valor del tipo ``uint8_t``.
+
+- receiveByteEvent: ``UART_EVENT_DISABLE`` (valor por defecto) o ``UART_EVENT_ENABLE``
+- receiveByteEventCallback: Una estructura con el puentero a función y el puntero al parámetro que le pueda pasar el usuario a dicha función.
+
+- transmiterFreeEvent: ``UART_EVENT_DISABLE`` (valor por defecto) o ``UART_EVENT_ENABLE``
+- transmiterFreeEventCallback: Una estructura con el puentero a función y el puntero al parámetro que le pueda pasar el usuario a dicha función.
+
+
+### Métodos de UART
+
+- Getters y Setters de sus propiedades.
+
+- Initialize: ``uartInitialize( UART<i>, UART_BAUDRATE(b) | UART_DATABITS(d) | UART_STOPBITS(s) | UART_PARITY(p) );``
+    - b = un valor de baudRate.
+    - d = un valor de dataBits.
+    - s = un valor de stopBits:.
+    - p = un valor de parity.
+
+- Métodos optimizados utilizando buffers:
+    - ``uartRead( UART<i>, uint8_t* buffer, bufferSize );``
+    - ``uartWrite( UART<i>, uint8_t* buffer, bufferSize );``
+
+- Métodos *legacy*: *(pensemos si los ponemos o no ??)*
+
+    - ``uartReadByte();`` alias de ``uartGetRxValue();``
+    - ``uartWriteByte();`` alias de ``gpioSetTxValue();``
+    - ``uartConfig();`` alias de ``uartInitialize();``
+    - ``uartWriteString();`` *(que opinan de modelar un tipo string_t ??)*
+
+**Configuración**
+
+``void uartConfig( uartMap_t uart, uint32_t baudRate )``
+
+- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART MAP).
+- Parámetro: ``uint32_t baudRate`` tasa de  bits.
+- Retorna: ``void``.
+
+Posibles configuraciones de baudRate: ``9600, 57600, 115200, etc.``
+
+**Recibir Byte**
+
+``bool_t uartReadByte( uartMap_t uart, uint8_t* receivedByte );``
+
+- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART Map).
+- Parámetro: ``uint8_t* byte`` Dirección de memoria a donde se escribirá el dato recibido en caso de que haya un dato para recibir.
+- Retorna: ``bool_t`` TRUE si recibió un dato, FALSE en caso contrario.
+
+**Enviar Byte**
+
+``void uartWriteByte( uartMap_t uart, uint8_t byte );``
+
+- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART Map).
+- Parámetro: ``uint8_t byte`` Byte a enviar.
+- Retorna: ``void``.
+
+**Enviar String**
+
+``void uartWriteString( uartMap_t uart, char* str );``
+
+- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART Map).
+- Parámetro: ``char* str`` String a enviar, puede ser un literal, por ejemplo "hola", o un vector de uint8_t terminado en 0 o '\0' (caracter NULL).
+- Retorna: ``void``.
+
+
+
 ## ADC
 
 Manejo de conversor analógico-digital.
@@ -360,102 +461,6 @@ La estructura del tipo ``RTC_t`` contiene los parámetros:
 
 
 
-
-## UART
-
-Modela periférico de comunicación UART (transmisor/receptor asincrónico universal), coumnmente llamado *puerto serie*.
-
-
-### Propiedades de UART
-
-- Propiedades de configuración:
-    - ``baudRate``
-    - ``dataBits``
-    - ``stopBits``
-    - ``parity``
-    - ``power``
-- Propiedades de valor:
-    - ``txValue``
-    - ``rxValue``
-- Propiedades de eventos:
-    - ``receiveByteEvent``
-    - ``receiveByteEventCallback``
-    - ``transmiterFreeEvent``
-    - ``transmiterFreeEventCallback``
-
-Valores posibles:
-
-- baudRate: ``1200``, ``2400``, ``4800``, ``9600``, ``19200``, ``38400``, ``57600`` o ``115200``.
-- dataBits: ``5`` (o ``0``), ``6``, ``7``, ``8`` o ``9``.
-- stopBits: ``1`` (o ``0``) o ``2``.
-- parity: ``UART_PARITY_NONE`` (o ``0``), ``UART_PARITY_ODD`` (o ``1``)  o ``UART_PARITY_EVEN`` (o ``2``) .
-
-- power: ``ON``, ``OFF``, ``ENABLE`` o ``DISABLE``
-
-- txValue: Un valor del tipo ``uint8_t``.
-- rxValue: {solo lectura} devuelve un valor del tipo ``uint8_t``.
-
-- receiveByteEvent: ``UART_EVENT_DISABLE`` (valor por defecto) o ``UART_EVENT_ENABLE``
-- receiveByteEventCallback: Una estructura con el puentero a función y el puntero al parámetro que le pueda pasar el usuario a dicha función.
-
-- transmiterFreeEvent: ``UART_EVENT_DISABLE`` (valor por defecto) o ``UART_EVENT_ENABLE``
-- transmiterFreeEventCallback: Una estructura con el puentero a función y el puntero al parámetro que le pueda pasar el usuario a dicha función.
-
-
-### Métodos de UART
-
-- Getters y Setters de sus propiedades.
-
-- Initialize: ``uartInitialize( UART<i>, UART_BAUDRATE(b) | UART_DATABITS(d) | UART_STOPBITS(s) | UART_PARITY(p) );``
-    - b = un valor de baudRate.
-    - d = un valor de dataBits.
-    - s = un valor de stopBits:.
-    - p = un valor de parity.
-
-- Métodos optimizados utilizando buffers:
-    - ``uartRead( UART<i>, uint8_t* buffer, bufferSize );``
-    - ``uartWrite( UART<i>, uint8_t* buffer, bufferSize );``
-
-- Métodos *legacy*: *(pensemos si los ponemos o no ??)*
-
-    - ``uartReadByte();`` alias de ``uartGetRxValue();``
-    - ``uartWriteByte();`` alias de ``gpioSetTxValue();``
-    - ``uartConfig();`` alias de ``uartInitialize();``
-    - ``uartWriteString();`` *(que opinan de modelar un tipo string_t ??)*
-
-**Configuración**
-
-``void uartConfig( uartMap_t uart, uint32_t baudRate )``
-
-- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART MAP).
-- Parámetro: ``uint32_t baudRate`` tasa de  bits.
-- Retorna: ``void``.
-
-Posibles configuraciones de baudRate: ``9600, 57600, 115200, etc.``
-
-**Recibir Byte**
-
-``bool_t uartReadByte( uartMap_t uart, uint8_t* receivedByte );``
-
-- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART Map).
-- Parámetro: ``uint8_t* byte`` Dirección de memoria a donde se escribirá el dato recibido en caso de que haya un dato para recibir.
-- Retorna: ``bool_t`` TRUE si recibió un dato, FALSE en caso contrario.
-
-**Enviar Byte**
-
-``void uartWriteByte( uartMap_t uart, uint8_t byte );``
-
-- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART Map).
-- Parámetro: ``uint8_t byte`` Byte a enviar.
-- Retorna: ``void``.
-
-**Enviar String**
-
-``void uartWriteString( uartMap_t uart, char* str );``
-
-- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART Map).
-- Parámetro: ``char* str`` String a enviar, puede ser un literal, por ejemplo "hola", o un vector de uint8_t terminado en 0 o '\0' (caracter NULL).
-- Retorna: ``void``.
 
 
 ## I2C
