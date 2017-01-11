@@ -1,5 +1,7 @@
 # Metodología de trabajo
 
+*Para desarrolladores.*
+
 ## Manejo del Repositorio
 
 ### Fork + Pull requests
