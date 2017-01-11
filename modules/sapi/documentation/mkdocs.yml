@@ -1,8 +1,9 @@
 site_name: Biblioteca para microcontroladores sAPI
 pages:
 - Introducción: index.md
-- Principios de diseño: design-rules.md
-- Metodología de trabajo: working-methodology.md
+- Metodología de trabajo (desarrolladores): working-methodology.md
+- Principios de diseño (desarrolladores): design-rules.md
+- Generador de módulos (desarrolladores): module-generator.md
 - Tipos de datos: data-types.md
 - Periféricos físicos: physical-ip-cores.md
 - Periféricos externos y virtuales: virtual-ip-cores.md

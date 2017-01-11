@@ -1,5 +1,7 @@
 # Principios de diseño de la biblioteca sAPI
 
+*Para desarrolladores.*
+
 ## Capas de software
 
 El modelo de la biblioteca se compone de las siguientes capas:
