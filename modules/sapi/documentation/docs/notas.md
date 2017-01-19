@@ -272,6 +272,10 @@ open drain push pull
     However, the open-drain allows you to cshort several outputs together, with a common pullup. This is called an wired-OR connection. Now you can drive the output low with any of the IO pins. To drive it high all ouputs have to be high. This is advantageous in some situations, because it eliminates the external gates that would otherwise be required.
 
 
+Vrpara poner breve descripcion:
+
+http://docs.micropython.org/en/latest/pyboard/library/pyb.Pin.html
+
 --------------------------------------------------------------
 
 
@@ -503,4 +507,98 @@ event such as an interrupt.  You would use it in the following situation::
 Control the frequency using :meth:`pyb.freq`::
 
     pyb.freq(30000000) # set CPU frequency to 30MHz
+
+
+## Power management
+
+Manejo de modos de consumo del microcontrolador.
+
+**Dormir hasta que ocurra la próxima interrupción**
+
+``void sleepUntilNextInterrupt( void );``
+
+- Parámetro: ninguno.
+- Retorna: nada.
+
+Ver: http://docs.micropython.org/en/latest/pyboard/library/pyb.html#reset-related-functions
+
+---------------------------------------------------------
+
+
+     ADC
+-------------
+
+http://docs.micropython.org/en/latest/pyboard/library/pyb.ADC.html
+
+
+
+http://www.nxp.com/documents/user_manual/UM10503.pdf
+
+- 10 bit successive approximation analog to digital converter.
+- Input multiplexing among 8 pins.
+- Power-down mode.
+- Measurement range 0 to 3.3 V.
+- 10-bit conversion time = 2.45us.
+- Burst conversion mode for single or multiple inputs.
+- Optional conversion on transition on input pin or Timer Match signal. 
+
+
+
+## ADC
+
+Modela periférico de Conversor Analógico-Digital (ADC en ingés).
+
+### Propiedades de ADC
+
+- clockSource (pin, F_CPU)
+- prescaler (clockSource/8, /16, /32, /64, /128, /256, /512, /1024 )
+    - Entre estos 2 se calcula:
+        - samplingRate
+
+- Propiedades de configuración:
+    - ``samplingRate``
+    - ``resolution`` (read only)
+    - ``voltageLow`` (read only)
+    - ``voltageReferece`` (read only)
+    - ``channels``
+    - ``power``
+- Propiedades de valor:
+    - ``value``
+- Propiedades de eventos:
+    - ``conversionCompleteEvent``
+    - ``conversionCompleteEventCallback``
+
+Valores posibles:
+
+- samplingRate: ``1200``, ``57600`` o ``115200``.
+
+
+
+MODOS de conversión:
+
+- BRUST_MODE: Conversion en ráfaga. Se puede aplicar a una o múltiples entradas. Sería equivalente llamarlo, PERIODIC_CONVERSION: Conversion periódica disparada a cierta tasa samplingRate.
+- TIMER_TRIGGERED_CONVERSION: Inicia una conversión disparada por timer. Puede ser Timer Match signal.
+- GPIO_TRIGGERED_CONVERSION: Inicia una conversión mediante la transición de un GPIO. 
+- SIGLE_CONVERSION: Modo de coversión única. En este modo hay que ejecutarle la orden de asdStartConversion();.
+
+- DMA_TRANSFER
+
+
+### Métodos de ADC
+
+- Getters y Setters de sus propiedades.
+
+ adcReadTimed(buf, time)
+    Read analog values into buf at a rate set by time.
+
+
+---------------------------------------------------------
+
+
+     DAC
+-------------
+
+
+
+http://docs.micropython.org/en/latest/pyboard/library/pyb.DAC.html
 

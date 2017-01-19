@@ -13,7 +13,6 @@ Este generador de módulos tiene que soportar:
 - Definir métodos, con ciertos parámetros que tendrán ciertos tipos de datos y un cuerpo de método escrito en lenguaje C. Opcionalmente un métododo tendá además modificadores. Existirán 2 tipos de métodos:
     - Métodos privados. Accesibles sólo por el módulo.
     - Métodos públicos. Accesibles por el módulo y otros módulos.
-    - Flag que
     - Documentación que indica el propósito del método.
 - Definir un módulo que contendrá: sus tipos de datos, dependencias de tipos externos, dependencias de otros módulos, propiedades y métodos.
     - Documentación que indica el propósito del módulo.
@@ -23,4 +22,4 @@ Este generador de módulos tiene que soportar:
     - modueleName.c, dependiente del hardware. Opcionalmente se podrá dividir en dos archivos, uno dependiente del hardware y uno independiente.
 - Generar automáticamente getters y setters de atributos.
 - Documentación es un objeto que tiene un Dicccionario con asocieciones lenguaje->texto.
-
+   

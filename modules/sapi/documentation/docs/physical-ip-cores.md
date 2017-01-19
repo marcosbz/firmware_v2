@@ -191,7 +191,7 @@ Valores posibles:
     - ``uartRead( UART<i>, uint8_t* buffer, bufferSize );``
     - ``uartWrite( UART<i>, uint8_t* buffer, bufferSize );``
 
-- Métodos *legacy*: *(pensemos si los ponemos o no ??)*
+- Métodos *legacy*:
 
     - ``uartReadByte();`` alias de ``uartGetRxValue();``
     - ``uartWriteByte();`` alias de ``gpioSetTxValue();``
@@ -236,9 +236,51 @@ Posibles configuraciones de baudRate: ``9600, 57600, 115200, etc.``
 
 ## ADC
 
-Manejo de conversor analógico-digital.
+Modela periférico de Conversor Analógico-Digital (ADC en ingés).
 
-samplingRate
+### Propiedades de ADC
+
+- clockSource (pin, F_CPU)
+- prescaler (clockSource/8, /16, /32, /64, /128, /256, /512, /1024 )
+    - Entre estos 2 se calcula:
+        - samplingRate
+
+- Propiedades de configuración:
+    - ``samplingRate``
+    - ``resolution`` (read only)
+    - ``voltageLow`` (read only)
+    - ``voltageReferece`` (read only)
+    - ``channels``
+    - ``power``
+- Propiedades de valor:
+    - ``value``
+- Propiedades de eventos:
+    - ``conversionCompleteEvent``
+    - ``conversionCompleteEventCallback``
+
+Valores posibles:
+
+- samplingRate: ``1200``, ``57600`` o ``115200``.
+
+
+
+MODOS de conversión:
+
+- BRUST_MODE: Conversion en ráfaga. Se puede aplicar a una o múltiples entradas. Sería equivalente llamarlo, PERIODIC_CONVERSION: Conversion periódica disparada a cierta tasa samplingRate.
+- TIMER_TRIGGERED_CONVERSION: Inicia una conversión disparada por timer. Puede ser Timer Match signal.
+- GPIO_TRIGGERED_CONVERSION: Inicia una conversión mediante la transición de un GPIO. 
+- SIGLE_CONVERSION: Modo de coversión única. En este modo hay que ejecutarle la orden de asdStartConversion();.
+
+- DMA_TRANSFER
+
+
+### Métodos de ADC
+
+- Getters y Setters de sus propiedades.
+
+ adcReadTimed(buf, time)
+    Read analog values into buf at a rate set by time.
+
 
 **Configuración inicial de conversor analógico-digital**
 
@@ -530,7 +572,9 @@ Manejo de modos de consumo del microcontrolador.
 ``void sleepUntilNextInterrupt( void );``
 
 - Parámetro: ninguno.
-- Retorna: nada.
+- Retorna: nada.e
+
+Ver: http://docs.micropython.org/en/latest/pyboard/library/pyb.html#reset-related-functions
 
 
 ## Archivos que contienen estos módulos
