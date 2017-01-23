@@ -123,12 +123,11 @@ gpioConfig_t gpioGetSpeed( gpioName_t gpioName );
 void gpioSetPower( gpioName_t gpioName, gpioConfig_t power );
 gpioConfig_t gpioGetPower( gpioName_t gpioName );
 
-// event
-void gpioSetEvent( gpioName_t gpioName, gpioConfig_t event );
-gpioConfig_t gpioGetEvent( gpioName_t gpioName );
-// eventCallback
-void gpioSetEventCallback( gpioName_t gpioName, Callback_t callback );
-//Callback_t gpioGetEventCallback( gpioName_t gpioName );
+// inputInterrupt
+// TODO: Add prototypes.
+
+// inputInterruptCallback
+// TODO: Add prototypes.
 
 // value
 void gpioSetValue( gpioName_t gpioName, bool_t value );
@@ -146,10 +145,17 @@ void gpioGroupConfig( gpioName_t* gpioNames,
                       gpioConfig_t config );
 
 // Write a GPIO
-void gpioWrite( gpioName_t gpioName, bool_t value );
+#define gpioWrite( gpioName, value )   gpioSetValue( (gpioName), (value) )
 
 // Read a GPIO
-bool_t gpioRead( gpioName_t gpioName );
+#define gpioRead( gpioName )           gpioGetValue( (gpioName) )
+
+// Toggle a GPIO output
+// gpioToggleOutput( gpioName ) --> Only for output mode
+
+// Read a GPIO input with a debounce time
+// gpioReadInputDebounced( gpioName, debounceTime ) --> Only for input mode
+
 
 /*==================[cplusplus]==============================================*/
 

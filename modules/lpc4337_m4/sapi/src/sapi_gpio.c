@@ -289,25 +289,25 @@ gpioConfig_t gpioGetPower( gpioName_t gpioName ){
    return GPIO_GET_CONFIG_PROPERTY( gpioName, GPIO_POWER_MASK );
 }
 
-// event
-void gpioSetEvent( gpioName_t gpioName, gpioConfig_t event ){
+
+// inputInterrupt
+
+void gpioSetInputInterrupt( gpioName_t gpioName, gpioConfig_t event ){
    GPIO_SET_CONFIG_PROPERTY( gpioName, event, GPIO_EVENT_MASK );
    // TODO: Set in real board
 }
 
-gpioConfig_t gpioGetEvent( gpioName_t gpioName ){
+gpioConfig_t gpioGetInputInterrupt( gpioName_t gpioName ){
    return GPIO_GET_CONFIG_PROPERTY( gpioName, GPIO_EVENT_MASK );
 }
 
-// eventCallback
-void gpioSetEventCallback( gpioName_t gpioName, Callback_t callback ){
-   
-
+// inputInterruptCallback
+void gpioSetInputInterruptCallback( gpioName_t gpioName, Callback_t callback ){
    // TODO: Set in real board
 }
 
 /*
-Callback_t gpioGetEventCallback( gpioName_t gpioName ){
+Callback_t gpioGetInputInterruptCallback( gpioName_t gpioName ){
    return 0;
 }*/
 
@@ -356,13 +356,17 @@ void gpioGroupConfig( gpioName_t* gpioNames,
 }
 
 // Write a GPIO
+/*
 void gpioWrite( gpioName_t gpioName, bool_t value ){
    gpioSetValue( gpioName, value );
 }
+*/
 
 // Read a GPIO
+/*
 bool_t gpioRead( gpioName_t gpioName ){
    return gpioGetValue( gpioName );
 }
+*/
 
 /*==================[end of file]============================================*/

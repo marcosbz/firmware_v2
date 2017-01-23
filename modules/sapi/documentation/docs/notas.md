@@ -272,6 +272,10 @@ open drain push pull
     However, the open-drain allows you to cshort several outputs together, with a common pullup. This is called an wired-OR connection. Now you can drive the output low with any of the IO pins. To drive it high all ouputs have to be high. This is advantageous in some situations, because it eliminates the external gates that would otherwise be required.
 
 
+Vrpara poner breve descripcion:
+
+http://docs.micropython.org/en/latest/pyboard/library/pyb.Pin.html
+
 --------------------------------------------------------------
 
 
@@ -399,12 +403,6 @@ stringInitialize( mensaje )
 
 ---------------------------------------------------------
 
-Ver en GPIO si quiero agregar:
-------------------------------
-
-debounceTime ---> Para modo input
-toggleOutput() ---> Para modo output
-
 ---------------------------------------------------------
 
 Para TIMER en general:
@@ -503,4 +501,341 @@ event such as an interrupt.  You would use it in the following situation::
 Control the frequency using :meth:`pyb.freq`::
 
     pyb.freq(30000000) # set CPU frequency to 30MHz
+
+
+## Power management
+
+Manejo de modos de consumo del microcontrolador.
+
+**Dormir hasta que ocurra la próxima interrupción**
+
+``void sleepUntilNextInterrupt( void );``
+
+- Parámetro: ninguno.
+- Retorna: nada.
+
+Ver: http://docs.micropython.org/en/latest/pyboard/library/pyb.html#reset-related-functions
+
+---------------------------------------------------------
+
+
+     ADC
+-------------
+
+http://docs.micropython.org/en/latest/pyboard/library/pyb.ADC.html
+
+
+
+http://www.nxp.com/documents/user_manual/UM10503.pdf
+
+- 10 bit successive approximation analog to digital converter.
+- Input multiplexing among 8 pins.
+- Power-down mode.
+- Measurement range 0 to 3.3 V.
+- 10-bit conversion time = 2.45us.
+- Burst conversion mode for single or multiple inputs.
+- Optional conversion on transition on input pin or Timer Match signal. 
+
+
+
+- Propiedades de configuración:
+    - clockSource (external pin, F_CPU)
+    - prescaler (clockSource/1, /2, /4, /8, /16, /32, /64, /128, /256, /512, /1024 )
+
+
+- samplingError
+
+Start conversion and end-of-conversion signals
+
+It has 8 analog input channels, 7 differential input channels, and 2 differential input channels with optional gain of I Ox and 200x.
+
+
+
+Lo de justificacion a izquierda o derecha sirve para usar los 10 bits o 8. Si justifico a izquierda, 8 y si justifico a derecha 10.
+
+
+
+- Propiedades de configuración:
+- Propiedades de valor:
+- Propiedades de eventos por polling:
+- Propiedades de eventos por interrupción:
+
+
+
+
+---------------------------------------------------------
+
+*(TODO: Agregar métodos en UART para chequear eventos por pooling)*
+
+---------------------------------------------------------
+
+
+
+## ADC
+
+Modela periférico de Conversor Analógico-Digital (ADC en ingés).
+
+### Propiedades de ADC
+
+- Propiedades de configuración:
+    - ``conversionMode``
+    - ``samplingRate`` (solo para conversión continua) *(ver si agregamos: clockSource, prescaler. En base a estos se calcula el samplingRate)*
+    - ``channelMode``
+    - ``gain`` (solo para entradas en modo diferencial) 
+    - ``voltageRefereceHighSource`` (ADC_EXTERNAL_REF_HIGH_PIN, ANALOG_VCC, INTERNAL (ej: 2560 mV) )
+        - ``voltageRefereceHigh`` (uint16_t representando el voltaje en mV)
+    - ``voltageRefereceLowSource`` (ADC_EXTERNAL_REF_LOW_PIN, GND)
+        - ``voltageRefereceLow`` (uint16_t representando el voltaje en mV), 0 por defecto.
+    - converterResolution: resolution = 2^converterResolution (converterResolution=8, 10, 12, 16, 24, 32)
+        - Entre estos se calcula el paso minimo de conversión en volts.
+            - stepSize = (voltageRefereceHigh - voltageRefereceLow) / resolution
+    - ``power``
+- Propiedades de valor:
+    - ``channel0``
+    - ``channel1``
+    - ``channel2``
+    - ``channel3``
+    - ``channel4``
+    - ``channel5``
+    - ``channel6``
+    - ``channel7``
+- Propiedades de valor:
+    - ``value``
+- Propiedades de eventos por polling:
+    - Ninguno.
+- Propiedades de eventos por interrupción:
+    - ``conversionCompleteInterrupt``
+    - ``conversionCompleteInterruptCallback``
+    - ``analogComparatorInterrupt``
+    - ``analogComparatorInterruptCallback``
+
+
+
+
+MODOS de conversión:
+
+- ADC_SOFTWARE_TRIGGERED_CONVERSION (por defecto): Modo de coversión disparada por software. En este modo hay que ejecutarle la orden de adcStartConversion( ADC0, channel0 ); para realizar una única conversión (bloqueante).
+- ADC_HARDWARE_TRIGGERED_CONVERSION
+    - ADC_CONTINUOUS_CONVERSION: Conversion continua o en ráfaga. Se puede aplicar a una o múltiples entradas. Conversion periódica disparada a tasa samplingRate.
+    - ADC_TIMER_TRIGGERED: Inicia una conversión disparada por timer. Puede ser Timer Match signal.
+    - ADC_GPIO_TRIGGERED: Inicia una conversión mediante la transición de un GPIO.
+
+
+Modos de los canales analógicos
+
+- ADC_SINGLE_ENDED_INPUTS
+    - ``channel<i>`` (con i=0,...,7)
+- ADC_DIFERENTIAL_INPUTS
+    - ``differentialChannel<i>`` (con i=0,...,3) (usa 2 channels comunes, por ejemplo channel0 conectado a - en el amplificador operacional y channel1 conectado a + en el amplificador operacional)
+    - gain (1x, 10x, 100x, 200x, ... )
+
+
+
+Eventos:
+
+    - ADC_DMA_TRANSFER
+    - ADC_COMPARE: Comparación del valor convertido contra un valor programado, para mayor que, igual que o menor que. 
+        - ADC_GREATER_THAN: Modo comparación por mayor que.
+        - ADC_LESS_THAN: Modo comparación por menor que.
+
+
+
+
+
+### Métodos de ADC
+
+- Getters y Setters de sus propiedades.
+
+ adcReadTimed(buf, time)
+    Read analog values into buf at a rate set by time.
+
+
+Methods
+
+adcRead()
+
+    Read the value on the analog pin and return it. The returned value will be between 0 and 4095.
+
+ADC.read_timed(buf, timer)
+
+    Read analog values into buf at a rate set by the timer object.
+
+    buf can be bytearray or array.array for example. The ADC values have 12-bit resolution and are stored directly into buf if its element size is 16 bits or greater. If buf has only 8-bit elements (eg a bytearray) then the sample resolution will be reduced to 8 bits.
+
+    timer should be a Timer object, and a sample is read each time the timer triggers. The timer must already be initialised and running at the desired sampling frequency.
+
+    To support previous behaviour of this function, timer can also be an integer which specifies the frequency (in Hz) to sample at. In this case Timer(6) will be automatically configured to run at the given frequency.
+
+
+
+
+---------------------------------------------------------
+
+
+     DAC
+-------------
+
+
+
+http://docs.micropython.org/en/latest/pyboard/library/pyb.DAC.html
+
+
+- 10-bit resolution
+- Controllable conversion speed
+- Can be optimized for speed and power
+- Low power consumption
+- Maximum update rate of 1 MHz
+- DMA support
+
+
+
+Methods
+
+DAC.init(bits=8)
+
+    Reinitialise the DAC. bits can be 8 or 12.
+
+DAC.deinit()
+
+    De-initialise the DAC making its pin available for other uses.
+
+DAC.noise(freq)
+
+    Generate a pseudo-random noise signal. A new random sample is written to the DAC output at the given frequency.
+
+DAC.triangle(freq)
+
+    Generate a triangle wave. The value on the DAC output changes at the given frequency, and the frequency of the repeating triangle wave itself is 2048 times smaller.
+
+DAC.write(value)
+
+    Direct access to the DAC output. The minimum value is 0. The maximum value is 2**``bits``-1, where bits is set when creating the DAC object or by using the init method.
+
+
+ DAC.write_timed(data, freq, *, mode=DAC.NORMAL)
+
+    Initiates a burst of RAM to DAC using a DMA transfer. The input data is treated as an array of bytes in 8-bit mode, and an array of unsigned half-words (array typecode ‘H’) in 12-bit mode.
+
+    freq can be an integer specifying the frequency to write the DAC samples at, using Timer(6). Or it can be an already-initialised Timer object which is used to trigger the DAC sample. Valid timers are 2, 4, 5, 6, 7 and 8.
+
+    mode can be DAC.NORMAL or DAC.CIRCULAR.
+
+    Example using both DACs at the same time:
+
+
+Modos:
+
+- DAC_NORMAL: saca muestras de un buffer y las manda a cierta tasa, enviando la secuencia una única vez.
+- DAC_CIRCULAR: saca muestras de un buffer y las manda a cierta tasa, repitiendo la secuencia en forma periodica.
+
+-----------------------------------------------------------------------
+
+## String
+
+### Manejo de memoria
+
+En cuanto al manejo de memoria, en tu ejemplo no veo que cuando haces StringNew() crees el buffer para guardarlo. Si yo por ejemplo quiero hacer:
+
+```c
+String_t s1 = StringNew("Numero ingresado ");
+uartWriteString( s1 );
+```
+¿Como sería? Se me ocurre hacer algo así:
+
+```c
+typedef struct {
+   const char *head;
+   const char *tail;
+   const char *top;
+   char* buffer;
+} String_t;
+
+
+```
+Se puede ver la macro andando con <http://coliru.stacked-crooked.com> agregando ``-E`` y removiendo ``&& a.out`` en la linea de comandos para la compilación.
+
+ creo que los strings deberían tener un largo máximo que el usuario podría toquetear con un define y un buffer asociado para soportar de forma estática estas operaciones. Si hace
+
+
+
+
+
+
+/*
+typedef struct {
+  const char *head;
+  const char *tail;
+  const char *top;
+  char* buffer;
+} String_t;
+
+String_t StringNewFromC(const char *cstr) {
+  String_t v;
+  v.head = cstr;
+  v.tail = v.head + strlen(cstr);
+  v.top = v.tail;
+  return v;
+}
+
+
+String_t _StringNew(const char *ptr, size_t size) {
+  String_t v;
+  v.head = v.tail = ptr;
+  v.top = ptr + size;
+  return v;
+}
+
+#define StringNew(buf) _StringNew(buf, sizeof(buf))
+
+
+int main()
+{
+    String_t s1, s2, s3;
+    s1 = StringNew("Hola ");
+    s2 = StringNew("Mundo");
+    char buffer[StringLen(s1) + StringLen(s2)];
+    s3 = StringConcat(s1, s2, buffer);
+    
+}
+
+*/
+
+
+
+
+
+typedef struct {
+  const char* buffer;
+  uint32_t bufferLen;
+} String_t;
+
+
+#define StringNew(strName, text) \
+    {.bufferLen = sizeof(text)}; \
+    char* strName##Buffer = text; \
+    char* strName##Buffer = text; \
+ 
+#define STRINGIFY(x) #x
+#define EXPAND(x) STRINGIFY(x)
+#define BUILD 1
+
+
+int main()
+{
+    
+    String_t s1 = StringNew( s1, "Hola ");
+    
+    printf("Build is %s\n", version);
+    
+    char *version = "XYZ Version 2.3.21 Build " EXPAND(BUILD);
+}
+
+-------------------------------------------------------------------------------
+
+     SPI
+---------------
+
+Evento interrupción de SPI: spiTransferCompleteInterrupt
+
+
 
