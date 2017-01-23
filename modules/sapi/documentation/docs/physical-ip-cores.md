@@ -8,15 +8,35 @@ desde que el software arranca hasta que termina o se destrulle el chip.
 
 Los periféricos modelados son:
 
+- CORE0 a CORE8.
 - GPIO0 a GPIO63.
 - ADC0 a ADC7. Tienen 8 canales cada uno.
 - DAC0 a DAC7.
 - TIMER0 a TIMER7.
 - RCT0 a RCT3.
 - UART0 a UART7.
-- I2C0 a I2C7.
 - SPI0 a SPI7.
+- I2C0 a I2C7.
 - POWER_MANAGEMENT.
+
+## CORE
+
+Modela el núcleo de CPU.
+
+### Propiedades de GPIO
+
+- Propiedades de eventos por interrupción:
+    - ``coreInterrupts``
+
+**Valores posibles:**
+
+- interrupts:
+    - ``CORE_INTERRUPTS_DISABLE`` (tipo ``coreConfig_t``).
+    - ``CORE_INTERRUPTS_ENABLE`` (tipo ``coreConfig_t``).
+
+### Métodos de Core
+
+...
 
 ## GPIO
 
@@ -25,55 +45,55 @@ pin es booleano.
 
 ### Propiedades de GPIO
 
-- Propiedades de configuración:
-    - ``mode`` (tipo ``gpioConfig_t``).
-    - ``speed`` (tipo ``gpioConfig_t``).
-    - ``power`` (tipo ``gpioConfig_t``).
-- Propiedades de valor:
-    - ``value`` (tipo ``bool_t``).
-- Propiedades de eventos:
-    - ``event`` (tipo ``gpioConfig_t``).
-    - ``eventCallback`` (tipo ``Callback_t``).
+**Propiedades de configuración**
 
-**Valores posibles:**
-
-- mode:
-    - ``GPIO_INPUT`` (valor por defecto). Posibles flags de modificación:
-        - ``GPIO_NOPULL`` (valor por defecto)
+- ``mode`` (tipo ``gpioConfig_t``). Valores posibles:
+    - ``GPIO_INPUT`` *(valor por defecto)*. Posibles flags de modificación:
+        - ``GPIO_NOPULL`` *(valor por defecto)*
         - ``GPIO_PULLUP``
         - ``GPIO_PULLDOWN``
         - ``GPIO_PULLUP | GPIO_PULLDOWN``
         - ``GPIO_PULLUPDOWN``
     - ``GPIO_OUTPUT``. Posibles flags de modificación:
-        - ``GPIO_PUSHPULL`` (valor por defecto)
+        - ``GPIO_PUSHPULL`` *(valor por defecto)*
         - ``GPIO_PUSHPULL | GPIO_STRENGTH(i)`` (i = 0,...,7)
         - ``GPIO_OPENCOLLECTOR`` ( es equivalente también ``GPIO_OPENDRAIN``)
         - ``GPIO_OPENCOLLECTOR | GPIO_PULLUP``
-- speed: ``GPIO_SPEED(i)`` (i = 0,...,7)
+- ``speed`` (tipo ``gpioConfig_t``). Valores posibles:
+    - ``GPIO_SPEED(i)`` (i = 0,...,7)
+- ``power`` (tipo ``gpioConfig_t``). Valores posibles:
+    - ``ON`` *(valor por defecto)*, ``OFF``, ``ENABLE`` o ``DISABLE``
 
-- power: ``ON`` (valor por defecto), ``OFF``, ``ENABLE`` o ``DISABLE``
+**Propiedades de valor**
 
-- value: ``ON``, ``OFF``, ``HIGH``, ``LOW``, ``TRUE`` o ``FALSE``
+- ``value`` (tipo ``bool_t``). Valores posibles:
+    - ``ON``, ``OFF``, ``HIGH``, ``LOW``, ``TRUE`` o ``FALSE``
 
-- event:
-    - ``GPIO_EVENT_DISABLE`` (valor por defecto)
+**Propiedades de eventos por polling**
+
+- Nunguno.
+
+**Propiedades de eventos por interrupción**
+
+- ``inputInterrupt`` (tipo ``gpioConfig_t``). Valores posibles:
+    - ``GPIO_INTERRUPT_DISABLE`` *(valor por defecto)*
     - ``GPIO_LEVEL`` Level-sensitive (high/low). Posibles flags de modificación:
-        - ``GPIO_LEVEL_HIGH`` (valor por defecto)
+        - ``GPIO_LEVEL_HIGH`` *(valor por defecto)*
         - ``GPIO_LEVEL_LOW``
         - ``GPIO_LEVEL_HIGH | GPIO_LEVEL_LOW``
         - ``GPIO_LEVEL_BOTH``
     - ``GPIO_EDGE`` Edge (Rising/falling). Posibles flags de modificación:
-        - ``GPIO_EDGE_RISING`` (valor por defecto)
+        - ``GPIO_EDGE_RISING`` *(valor por defecto)*
         - ``GPIO_EDGE_FALLING``
         - ``GPIO_EDGE_RISING | GPIO_EDGE_FALLING``
         - ``GPIO_EDGE_BOTH``
     - ``GPIO_ASYNCHRONOUS_EDGE`` Asynchronous Edge (Rising/falling). Posibles flags de modificación:
-        - ``GPIO_EDGE_RISING`` (valor por defecto)
+        - ``GPIO_EDGE_RISING`` *(valor por defecto)*
         - ``GPIO_EDGE_FALLING``
         - ``GPIO_EDGE_RISING | GPIO_EDGE_FALLING``
         - ``GPIO_EDGE_BOTH``
-- eventCallback:
-    - Una estructura con el puentero a función y el puntero al parámetro que le pueda pasar el usuario a dicha función.
+- ``inputInterruptCallback`` (tipo ``Callback_t``). Valores posibles:
+    - Una estructura con el puentero a función y el puntero al parámetro que le pueda pasar el usuario a dicha función. *(valor por defecto)* un null pointer con un while(1) *(TODO)*
 
 
 ### Métodos de GPIO
@@ -82,8 +102,6 @@ pin es booleano.
 
 - Getters y Setters de configuración:
     - ``mode``
-        - ``gpioSetMode( GPIO<i>, GPIO_INPUT | GPIO_PULLUP );``
-
         - ``gpioSetMode( GPIO<i>, GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_STRENGTH(7) );``
         - ``gpioMode = gpioGetMode( GPIO<i> );``
     - ``speed``
@@ -96,15 +114,13 @@ pin es booleano.
     - ``value``
         - ``gpioSetValue( GPIO<i>, HIGH );``
         - ``booleanValue = gpioGetValue( GPIO<i> );``
-- Getters y Setters de eventos:
-    - ``event``
-        - ``gpioSetEvent( GPIO<i>, GPIO_EDGE | GPIO_EDGE_RISING );``
-        - ``gpioEvent = gpioGetEvent( GPIO<i> );``
-    - ``eventCallback``
-        - ``gpioSetValue( GPIO<i>, HIGH );``
-        - ``booleanValue = gpioGetValue( GPIO<i> );``
+- Getters y Setters de eventos por interrupción:
+    - ``inputInterrupt``
+        - ``gpioSetInputInterrupt( GPIO<i>, GPIO_EDGE | GPIO_EDGE_RISING );``
+        - ``gpioInputInterrupt = gpioGetInputInterrupt( GPIO<i> );``
+    - ``inputInterruptCallback``
 
-**Configuración inicial y modo de una entrada o salida**
+**Configuración de una entrada o salida**
 
 ``bool_t gpioConfig( gpioMap_t pin, gpio_t mode );``
 
@@ -136,103 +152,6 @@ Alias de ``gpioSetValue();``
 
 
 
-## UART
-
-Modela periférico de comunicación UART (transmisor/receptor asincrónico universal), coumnmente llamado *puerto serie*.
-
-
-### Propiedades de UART
-
-- Propiedades de configuración:
-    - ``baudRate``
-    - ``dataBits``
-    - ``stopBits``
-    - ``parity``
-    - ``power``
-- Propiedades de valor:
-    - ``txValue``
-    - ``rxValue``
-- Propiedades de eventos:
-    - ``receiveByteEvent``
-    - ``receiveByteEventCallback``
-    - ``transmiterFreeEvent``
-    - ``transmiterFreeEventCallback``
-
-Valores posibles:
-
-- baudRate: ``1200``, ``2400``, ``4800``, ``9600``, ``19200``, ``38400``, ``57600`` o ``115200``.
-- dataBits: ``5`` (o ``0``), ``6``, ``7``, ``8`` o ``9``.
-- stopBits: ``1`` (o ``0``) o ``2``.
-- parity: ``UART_PARITY_NONE`` (o ``0``), ``UART_PARITY_ODD`` (o ``1``)  o ``UART_PARITY_EVEN`` (o ``2``) .
-
-- power: ``ON``, ``OFF``, ``ENABLE`` o ``DISABLE``
-
-- txValue: Un valor del tipo ``uint8_t``.
-- rxValue: {solo lectura} devuelve un valor del tipo ``uint8_t``.
-
-- receiveByteEvent: ``UART_EVENT_DISABLE`` (valor por defecto) o ``UART_EVENT_ENABLE``
-- receiveByteEventCallback: Una estructura con el puentero a función y el puntero al parámetro que le pueda pasar el usuario a dicha función.
-
-- transmiterFreeEvent: ``UART_EVENT_DISABLE`` (valor por defecto) o ``UART_EVENT_ENABLE``
-- transmiterFreeEventCallback: Una estructura con el puentero a función y el puntero al parámetro que le pueda pasar el usuario a dicha función.
-
-
-### Métodos de UART
-
-- Getters y Setters de sus propiedades.
-
-- Initialize: ``uartInitialize( UART<i>, UART_BAUDRATE(b) | UART_DATABITS(d) | UART_STOPBITS(s) | UART_PARITY(p) );``
-    - b = un valor de baudRate.
-    - d = un valor de dataBits.
-    - s = un valor de stopBits:.
-    - p = un valor de parity.
-
-- Métodos optimizados utilizando buffers:
-    - ``uartRead( UART<i>, uint8_t* buffer, bufferSize );``
-    - ``uartWrite( UART<i>, uint8_t* buffer, bufferSize );``
-
-- Métodos *legacy*:
-
-    - ``uartReadByte();`` alias de ``uartGetRxValue();``
-    - ``uartWriteByte();`` alias de ``gpioSetTxValue();``
-    - ``uartConfig();`` alias de ``uartInitialize();``
-    - ``uartWriteString();`` *(que opinan de modelar un tipo string_t ??)*
-
-**Configuración**
-
-``void uartConfig( uartMap_t uart, uint32_t baudRate )``
-
-- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART MAP).
-- Parámetro: ``uint32_t baudRate`` tasa de  bits.
-- Retorna: ``void``.
-
-Posibles configuraciones de baudRate: ``9600, 57600, 115200, etc.``
-
-**Recibir Byte**
-
-``bool_t uartReadByte( uartMap_t uart, uint8_t* receivedByte );``
-
-- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART Map).
-- Parámetro: ``uint8_t* byte`` Dirección de memoria a donde se escribirá el dato recibido en caso de que haya un dato para recibir.
-- Retorna: ``bool_t`` TRUE si recibió un dato, FALSE en caso contrario.
-
-**Enviar Byte**
-
-``void uartWriteByte( uartMap_t uart, uint8_t byte );``
-
-- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART Map).
-- Parámetro: ``uint8_t byte`` Byte a enviar.
-- Retorna: ``void``.
-
-**Enviar String**
-
-``void uartWriteString( uartMap_t uart, char* str );``
-
-- Parámetro: ``uartMap_t uart`` UART a configurar (ver UART Map).
-- Parámetro: ``char* str`` String a enviar, puede ser un literal, por ejemplo "hola", o un vector de uint8_t terminado en 0 o '\0' (caracter NULL).
-- Retorna: ``void``.
-
-
 
 ## ADC
 
@@ -240,66 +159,46 @@ Modela periférico de Conversor Analógico-Digital (ADC en ingés).
 
 ### Propiedades de ADC
 
-- clockSource (pin, F_CPU)
-- prescaler (clockSource/8, /16, /32, /64, /128, /256, /512, /1024 )
-    - Entre estos 2 se calcula:
-        - samplingRate
+----------------------
+**Propiedades de configuración**
+
+- ``mode`` (tipo ``gpioConfig_t``). Valores posibles:
+    - ``GPIO_INPUT`` (valor por defecto). Posibles flags de modificación:
+------------------------
 
 - Propiedades de configuración:
-    - ``samplingRate``
-    - ``resolution`` (read only)
-    - ``voltageLow`` (read only)
-    - ``voltageReferece`` (read only)
-    - ``channels``
+    - ``conversionMode``
+    - ``samplingRate`` (solo aplicablepara conversión continua)
+    - ``channelMode``
+    - ``gain<i>`` (coni) (solo para entradas en modo diferencial) 
+    - ``voltageRefereceHighSource`` (ADC_EXTERNAL_REF_HIGH_PIN, ANALOG_VCC, INTERNAL (ej: 2560 mV) )
+        - ``voltageRefereceHigh`` (uint16_t representando el voltaje en mV)
+    - ``voltageRefereceLowSource`` (ADC_EXTERNAL_REF_LOW_PIN, GND)
+        - ``voltageRefereceLow`` (uint16_t representando el voltaje en mV), 0 por defecto.
+    - converterResolution: resolution = 2^converterResolution (converterResolution=8, 10, 12, 16, 24, 32)
+        - Entre estos se calcula el paso minimo de conversión en volts.
+            - stepSize = (voltageRefereceHigh - voltageRefereceLow) / resolution
     - ``power``
 - Propiedades de valor:
+    - ``channel0``
+    - ``channel1``
+    - ``channel2``
+    - ``channel3``
+    - ``channel4``
+    - ``channel5``
+    - ``channel6``
+    - ``channel7``
+- Propiedades de valor:
     - ``value``
-- Propiedades de eventos:
-    - ``conversionCompleteEvent``
-    - ``conversionCompleteEventCallback``
-
-Valores posibles:
-
-- samplingRate: ``1200``, ``57600`` o ``115200``.
-
-
-
-MODOS de conversión:
-
-- BRUST_MODE: Conversion en ráfaga. Se puede aplicar a una o múltiples entradas. Sería equivalente llamarlo, PERIODIC_CONVERSION: Conversion periódica disparada a cierta tasa samplingRate.
-- TIMER_TRIGGERED_CONVERSION: Inicia una conversión disparada por timer. Puede ser Timer Match signal.
-- GPIO_TRIGGERED_CONVERSION: Inicia una conversión mediante la transición de un GPIO. 
-- SIGLE_CONVERSION: Modo de coversión única. En este modo hay que ejecutarle la orden de asdStartConversion();.
-
-- DMA_TRANSFER
+- Propiedades de eventos por polling:
+    - Ninguno.
+- Propiedades de eventos por interrupción:
+    - ``conversionCompleteInterrupt``
+    - ``conversionCompleteInterruptCallback``
+    - ``analogComparatorInterrupt``
+    - ``analogComparatorInterruptCallback``
 
 
-### Métodos de ADC
-
-- Getters y Setters de sus propiedades.
-
- adcReadTimed(buf, time)
-    Read analog values into buf at a rate set by time.
-
-
-**Configuración inicial de conversor analógico-digital**
-
-``void adcConfig( adcConfig_t config );``
-
-- Parámetro: ``adcConfig_t config`` configuración.
-- Retorna: ``void``.
-
-Posibles configuraciones:
-
-- ``ADC_ENABLE`` Habilita el periférico ADC.
-- ``ADC_DISABLE`` Deshabilita el periférico ADC.
-
-**Lectura de Entrada analógica**
-
-``uint32_t adcRead( adcMap_t analogInput );``
-
-- Parámetro: ``adcMap_t analogInput`` pin a leer (ver ADC Map).
-- Retorna: ``uint32_t`` el valor actual de la entrada analógica.
 
 
 ## DAC
@@ -325,6 +224,7 @@ Posibles configuraciones:
 - Parámetro: ``dacMap_t analogOutput`` pin a escribir (ver DAC Map).
 - Parámetro: ``uint32_t value`` valor del pin a escribir.
 - Retorna: ``void``.
+
 
 
 
@@ -384,8 +284,8 @@ timer match outputs
 
 Propiedades:
 
-- clockSource (pin, F_CPU)
-- prescaler (clockSource/8, /16, /32, /64, /128, /256, /512, /1024 )
+- clockSource (external pin, F_CPU)
+- prescaler (clockSource/1, /2, /4, /8, /16, /32, /64, /128, /256, /512, /1024 )
     - Entre estos 2 se calcula:
         - frequency
         - period
@@ -400,15 +300,18 @@ Propiedades:
 
 Eventos:
 
-- Overflow (marca evento de rebalse a 0, ejecuta un callback, ojo que en modo up-down no marca cuando llega al máximo).
-- Compare Match (marca evento de alcanzar el valor de comaración, ejecuta un callback). Puede tener más de un evento de match por timer (4 en LPC4337 TIMER, 16 en el SCT).
-- Input capture (marca el evento del pin, guarda el valor actual de counter y ejecuta un callback). Puede tener más de un evento de capture por timer (4 en LPC4337 TIMER, 8 en el SCT).
+- timerOverflowEvent (marca evento de rebalse a 0, ejecuta un callback, ojo que en modo up-down no marca cuando llega al máximo).
+- timerCompareMatchEvent (marca evento de alcanzar el valor de comaración, ejecuta un callback). Puede tener más de un evento de match por timer (4 en LPC4337 TIMER, 16 en el SCT).
+- timerInputCaptureEvent (marca el evento del pin, guarda el valor actual de counter y ejecuta un callback). Puede tener más de un evento de capture por timer (4 en LPC4337 TIMER, 8 en el SCT).
 
 - Cuando ocurre un evento además de lo que hace se puede:
     - Continuous normal operation (no hace nada, NO VALIDO PARA EVENTO OVERFLOW)
     - Reset timer counter on event /|/|/| 
-    - Invert counter mode timer on event /\/\/\ --> Solo si soporta conteo up-down
+    - Invert timer counter mode on event /\/\/\ --> Solo si soporta conteo up-down
     - Stop timer on event  /|___
+
+
+
 
 Timeout:
 
@@ -466,6 +369,7 @@ Posibles configuraciones:
 
 
 
+
 ## RTC
 
 Manejo del periférico RTC (reloj de tiempo real).
@@ -500,6 +404,132 @@ La estructura del tipo ``RTC_t`` contiene los parámetros:
 
 - Parámetro: ``rtc_t * rtc`` Puntero a estructura del tipo RTC_t con la nueva fecha y hora a setear.
 - Retorna: ``bool_t`` TRUE.
+
+
+
+## UART
+
+Modela periférico de comunicación UART (transmisor/receptor asincrónico universal), coumnmente llamado *puerto serie*.
+
+Modos de utilización de UART
+
+- Bloqueante (esperar trasmisor libre o recepción por polling).
+- No bloqueante (interrupción).
+
+
+### Propiedades de UART
+
+**Propiedades de configuración**
+
+- ``baudRate`` (tipo ``uartConfig_t``). Valores posibles:
+    - ``1200``, ``2400``, ``4800``, ``9600`` *(valor por defecto)*, ``19200``, ``38400``, ``57600`` o ``115200``.
+- ``dataBits`` (tipo ``uartConfig_t``). Valores posibles:
+    - ``5``, ``6``, ``7``, ``8`` *(valor por defecto)* o ``9``.
+- ``stopBits`` (tipo ``uartConfig_t``). Valores posibles:
+    - ``1`` *(valor por defecto)* o ``2``.
+- ``parity`` (tipo ``uartConfig_t``). Valores posibles:
+    - ``UART_PARITY_NONE`` *(valor por defecto)*, ``UART_PARITY_ODD`` o ``UART_PARITY_EVEN``.
+- ``flowControl`` (tipo ``uartConfig_t``). Valores posibles:
+    - ``UART_FLOWCONTROL_NONE`` *(valor por defecto)*, ``UART_FLOWCONTROL_CTS``, ``UART_FLOWCONTROL_RTS``, ``UART_FLOWCONTROL_RTS_CTS``.
+- ``power`` (tipo ``uartConfig_t``). Valores posibles:
+    - ``ON``, ``OFF`` *(valor por defecto)*, ``ENABLE`` o ``DISABLE``
+
+**Propiedades de valor**
+
+- ``txValue`` (tipo ``uint8_t``). Valores posibles:
+    - Un valor del tipo ``uint8_t`` que representa el un byte a transmitir.
+- ``rxValue``*{solo lectura}* (tipo ``uint8_t``). Valores posibles:
+    - Un valor del tipo ``uint8_t`` que representa el último byte recibido.
+- ``timeout`` (tipo ``tick_t``). Valores posibles:
+    - Un valor del tipo ``tick_t`` que representa milisegundos. Este parámetro es para transmisión y recepción bloqueante. Se ignora para transmisión y recepción por interrupción.
+
+**Propiedades de eventos por polling o interrupción**
+
+*(TODO: Hacer ejemplos de uso de eventos por polling e interrupción para ver cuales deben tenerse como propiedades)*
+
+Los siguientes son del tipo ``uartConfig_t``:
+
+- ``byteReceive``
+- ``byteSendComplete``
+- ``stringSendComplete``
+- ``stringSendingingTimeout``
+- ``stringReceivedComplete``
+- ``stringReceivingTimeout``
+
+Valores posibles:
+
+- ``DISABLE`` (valor por defecto) o ``ENABLE``
+
+Los siguientes son del tipo ``uartEventFlag_t``:
+
+- ``byteReceive``
+- ``byteSendComplete``
+- ``stringSendComplete``
+- ``stringSendingingTimeout``
+- ``stringReceivedComplete``
+- ``stringReceivingTimeout``
+
+Valores posibles:
+
+- ``DISABLE`` (valor por defecto) o ``ENABLE``
+
+Los siguientes son del tipo ``Callback_t``.
+
+- ``byteSendCompleteInterruptCallback`` 
+- ``byteReceiveInterruptCallback``
+- ``stringReceivedCompleteCallback``
+- ``stringSendingTimeoutCallback``
+- ``stringSendCompleteCallback``
+- ``stringReceivingTimeoutCallback``
+
+Valores posibles:
+
+- Una estructura con el puentero a función y el puntero al parámetro que le pueda pasar el usuario a dicha función. *(valor por defecto)* un null pointer con un while(1) *(TODO)*
+
+
+### Métodos de UART
+
+- Getters y Setters de sus propiedades.
+
+- Initialize: 
+
+```c
+void uartInitialize( 
+                     UART<i>, 
+                     UART_BAUDRATE(b) | UART_DATABITS(d) | UART_STOPBITS(s) | 
+                     UART_PARITY(p) | UART_FLOWCONTROL(f) | UART_TIMEOUT(t) 
+                   );
+
+/*
+Con:
+ - b = un valor de baudRate.
+ - d = un valor de dataBits.
+ - s = un valor de stopBits.
+ - p = un valor de parity.
+ - f = un valor de flowControl.
+ - t = un valor de timeout en ms.
+*/
+```
+
+- Métodos  para utilizando buffers:
+    - ``uartSend( UART<i>, uint8_t* buffer, bufferSize );``
+    - ``uartReceive( UART<i>, uint8_t* buffer, bufferSize );``
+
+- Métodos tipados:
+
+    - ``uartConfig();`` alias de ``uartInitialize();``
+    - ``uartSendByte();`` usa ``uartGetRxValue();``
+    - ``uartReceiveByte();`` usa ``gpioSetTxValue();``
+    - ``uartSendString();``
+    - ``uartReceiveString();``
+
+*(TODO: Agregar métodos en UART para chequear explicitamente eventos por pooling), si se dan ejecutar el callback*
+
+
+
+
+## SPI
+
 
 
 
@@ -559,8 +589,6 @@ bool_t i2cWrite( i2cMap_t  i2cNumber,
 - Retorna: ``bool_t`` TRUE si se pudo escribir correctamente.
 
 
-## SPI
-
 
 
 ## Power management
@@ -577,32 +605,33 @@ Manejo de modos de consumo del microcontrolador.
 Ver: http://docs.micropython.org/en/latest/pyboard/library/pyb.html#reset-related-functions
 
 
+
+
 ## Archivos que contienen estos módulos
-
-**src** (.c):
-
-- sapi_adc.c
-- sapi_dac.c
-- sapi_gpio.c
-- sapi_i2c.c
-- sapi_pwm.c
-- sapi_rtc.c
-- sapi_sct.c
-- sapi_sleep.c
-- sapi_timer.c
-- sapi_uart.c
 
 **inc** (.h):
 
+- sapi_core.h
+- sapi_gpio.h
 - sapi_adc.h
 - sapi_dac.h
-- sapi_gpio.h
-- sapi_i2c.h
-- sapi_keypad.h
-- sapi_pwm.h
-- sapi_rtc.h
-- sapi_sct.h
-- sapi_sleep.h
-- sapi_spi.h
 - sapi_timer.h
+- sapi_rtc.h
 - sapi_uart.h
+- sapi_spi.h
+- sapi_i2c.h
+- sapi_power.h
+
+**src** (.c):
+
+- sapi_core.c
+- sapi_gpio.c
+- sapi_adc.c
+- sapi_dac.c
+- sapi_timer.c
+- sapi_rtc.c
+- sapi_uart.c
+- sapi_spi.c
+- sapi_i2c.c
+- sapi_power.c
+

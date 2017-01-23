@@ -53,6 +53,39 @@ extern "C" {
 /*==================[typedef]================================================*/
 
 typedef enum{
+   GPIO_INPUT                    = 1,
+      GPIO_NOPULL                = 0, // default value with GPIO_INPUT
+      GPIO_PULLUP                = (1<<1),
+      GPIO_PULLDOWN              = (1<<2),
+      GPIO_PULLUPDOWN            = GPIO_PULLUP | GPIO_PULLDOWN,
+         GPIO_INPUT_PULLUP       = GPIO_INPUT | GPIO_PULLUP,
+         GPIO_INPUT_PULLDOWN     = GPIO_INPUT | GPIO_PULLDOWN,
+         GPIO_INPUT_PULL_UP_DOWN = GPIO_INPUT | GPIO_PULLUP | GPIO_PULLDOWN,
+   GPIO_OUTPUT                   = 0,
+      GPIO_PUSHPULL              = 0, // default value with GPIO_OUTPUT
+      GPIO_OPENDRAIN             = (1<<3),
+      GPIO_OPENCOLLECTOR         = GPIO_OPENDRAIN,
+         GPIO_OUTPUT_GPIO_PUSHPULL_GPIO_STRENGTH1 = 128,
+         GPIO_OUTPUT_GPIO_PUSHPULL_GPIO_STRENGTH2 = 256,
+         GPIO_OUTPUT_GPIO_PUSHPULL_GPIO_STRENGTH3 = 384,
+         GPIO_OUTPUT_GPIO_PUSHPULL_GPIO_STRENGTH4 = 512,
+         GPIO_OUTPUT_GPIO_PUSHPULL_GPIO_STRENGTH5 = 640,
+         GPIO_OUTPUT_GPIO_PUSHPULL_GPIO_STRENGTH6 = 768,
+         GPIO_OUTPUT_GPIO_PUSHPULL_GPIO_STRENGTH7 = 896,
+         GPIO_OUTPUT_OPENDRAIN_PULLUP = GPIO_OUTPUT|GPIO_OPENDRAIN|GPIO_PULLUP,
+   GPIO_LEVEL                    = (1<<10),
+      GPIO_LEVEL_HIGH            = (1<<13),
+      GPIO_LEVEL_LOW             = (1<<14),
+   GPIO_EDGE                     = (1<<11),
+   GPIO_ASYNCHRONOUS_EDGE        = (1<<12),
+      GPIO_EDGE_RISING           = GPIO_LEVEL_HIGH,
+      GPIO_EDGE_FALLING          = GPIO_LEVEL_LOW,
+   UART_POWER_ON                 = (1<<15),
+   UART_POWER_OFF                = (0<<15)
+} uartConfig_t;
+
+
+typedef enum{
    UART_RECEIVE_STRING_CONFIG,
    UART_RECEIVE_STRING_RECEIVING,
    UART_RECEIVE_STRING_RECEIVED_OK,

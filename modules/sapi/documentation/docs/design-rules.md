@@ -96,10 +96,10 @@ typedef enum{
 - Ejemplo de cambio de una propiedad teniendo en cuenta el valor previo:``<ipCore>Set<PropertyName>( IPCORE<i>, <ipCore>Get<PropertyName>( <IPCOREi> ) | <MODIFY_FLAGi> );``
 
 - Propiedades más comunes que encontraremos en un periférico:
-   - configParamName: Un valor de configuración del periférico.
-   - power: Para encender o apagar el IPCore.
-   - value: Un valor a leer o escribir.
-   - eventName: Un evento asociado al periférico (interrupción u otro).
-   - eventNameCallback: Una estructura con el puentero a función y el puntero al parámetro que le pueda pasar el usuario a dicha función. (interrupción u otro).
+    - configParamName: Un valor de configuración del periférico.
+    - power: Para encender o apagar el IPCore.
+    - value: Un valor a leer o escribir.
+    - eventName: Un evento asociado al periférico (interrupción u otro).
+    - eventNameCallback: Una estructura con el puentero a función y el puntero al parámetro que le pueda pasar el usuario a dicha función. (interrupción u otro).
 
 
