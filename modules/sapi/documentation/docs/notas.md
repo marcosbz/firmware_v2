@@ -555,118 +555,6 @@ Lo de justificacion a izquierda o derecha sirve para usar los 10 bits o 8. Si ju
 
 
 
-- Propiedades de configuración:
-- Propiedades de valor:
-- Propiedades de eventos por polling:
-- Propiedades de eventos por interrupción:
-
-
-
-
----------------------------------------------------------
-
-*(TODO: Agregar métodos en UART para chequear eventos por pooling)*
-
----------------------------------------------------------
-
-
-
-## ADC
-
-Modela periférico de Conversor Analógico-Digital (ADC en ingés).
-
-### Propiedades de ADC
-
-- Propiedades de configuración:
-    - ``conversionMode``
-    - ``samplingRate`` (solo para conversión continua) *(ver si agregamos: clockSource, prescaler. En base a estos se calcula el samplingRate)*
-    - ``channelMode``
-    - ``gain`` (solo para entradas en modo diferencial) 
-    - ``voltageRefereceHighSource`` (ADC_EXTERNAL_REF_HIGH_PIN, ANALOG_VCC, INTERNAL (ej: 2560 mV) )
-        - ``voltageRefereceHigh`` (uint16_t representando el voltaje en mV)
-    - ``voltageRefereceLowSource`` (ADC_EXTERNAL_REF_LOW_PIN, GND)
-        - ``voltageRefereceLow`` (uint16_t representando el voltaje en mV), 0 por defecto.
-    - converterResolution: resolution = 2^converterResolution (converterResolution=8, 10, 12, 16, 24, 32)
-        - Entre estos se calcula el paso minimo de conversión en volts.
-            - stepSize = (voltageRefereceHigh - voltageRefereceLow) / resolution
-    - ``power``
-- Propiedades de valor:
-    - ``channel0``
-    - ``channel1``
-    - ``channel2``
-    - ``channel3``
-    - ``channel4``
-    - ``channel5``
-    - ``channel6``
-    - ``channel7``
-- Propiedades de valor:
-    - ``value``
-- Propiedades de eventos por polling:
-    - Ninguno.
-- Propiedades de eventos por interrupción:
-    - ``conversionCompleteInterrupt``
-    - ``conversionCompleteInterruptCallback``
-    - ``analogComparatorInterrupt``
-    - ``analogComparatorInterruptCallback``
-
-
-
-
-MODOS de conversión:
-
-- ADC_SOFTWARE_TRIGGERED_CONVERSION (por defecto): Modo de coversión disparada por software. En este modo hay que ejecutarle la orden de adcStartConversion( ADC0, channel0 ); para realizar una única conversión (bloqueante).
-- ADC_HARDWARE_TRIGGERED_CONVERSION
-    - ADC_CONTINUOUS_CONVERSION: Conversion continua o en ráfaga. Se puede aplicar a una o múltiples entradas. Conversion periódica disparada a tasa samplingRate.
-    - ADC_TIMER_TRIGGERED: Inicia una conversión disparada por timer. Puede ser Timer Match signal.
-    - ADC_GPIO_TRIGGERED: Inicia una conversión mediante la transición de un GPIO.
-
-
-Modos de los canales analógicos
-
-- ADC_SINGLE_ENDED_INPUTS
-    - ``channel<i>`` (con i=0,...,7)
-- ADC_DIFERENTIAL_INPUTS
-    - ``differentialChannel<i>`` (con i=0,...,3) (usa 2 channels comunes, por ejemplo channel0 conectado a - en el amplificador operacional y channel1 conectado a + en el amplificador operacional)
-    - gain (1x, 10x, 100x, 200x, ... )
-
-
-
-Eventos:
-
-    - ADC_DMA_TRANSFER
-    - ADC_COMPARE: Comparación del valor convertido contra un valor programado, para mayor que, igual que o menor que. 
-        - ADC_GREATER_THAN: Modo comparación por mayor que.
-        - ADC_LESS_THAN: Modo comparación por menor que.
-
-
-
-
-
-### Métodos de ADC
-
-- Getters y Setters de sus propiedades.
-
- adcReadTimed(buf, time)
-    Read analog values into buf at a rate set by time.
-
-
-Methods
-
-adcRead()
-
-    Read the value on the analog pin and return it. The returned value will be between 0 and 4095.
-
-ADC.read_timed(buf, timer)
-
-    Read analog values into buf at a rate set by the timer object.
-
-    buf can be bytearray or array.array for example. The ADC values have 12-bit resolution and are stored directly into buf if its element size is 16 bits or greater. If buf has only 8-bit elements (eg a bytearray) then the sample resolution will be reduced to 8 bits.
-
-    timer should be a Timer object, and a sample is read each time the timer triggers. The timer must already be initialised and running at the desired sampling frequency.
-
-    To support previous behaviour of this function, timer can also be an integer which specifies the frequency (in Hz) to sample at. In this case Timer(6) will be automatically configured to run at the given frequency.
-
-
 
 
 ---------------------------------------------------------
@@ -689,44 +577,6 @@ http://docs.micropython.org/en/latest/pyboard/library/pyb.DAC.html
 
 
 
-Methods
-
-DAC.init(bits=8)
-
-    Reinitialise the DAC. bits can be 8 or 12.
-
-DAC.deinit()
-
-    De-initialise the DAC making its pin available for other uses.
-
-DAC.noise(freq)
-
-    Generate a pseudo-random noise signal. A new random sample is written to the DAC output at the given frequency.
-
-DAC.triangle(freq)
-
-    Generate a triangle wave. The value on the DAC output changes at the given frequency, and the frequency of the repeating triangle wave itself is 2048 times smaller.
-
-DAC.write(value)
-
-    Direct access to the DAC output. The minimum value is 0. The maximum value is 2**``bits``-1, where bits is set when creating the DAC object or by using the init method.
-
-
- DAC.write_timed(data, freq, *, mode=DAC.NORMAL)
-
-    Initiates a burst of RAM to DAC using a DMA transfer. The input data is treated as an array of bytes in 8-bit mode, and an array of unsigned half-words (array typecode ‘H’) in 12-bit mode.
-
-    freq can be an integer specifying the frequency to write the DAC samples at, using Timer(6). Or it can be an already-initialised Timer object which is used to trigger the DAC sample. Valid timers are 2, 4, 5, 6, 7 and 8.
-
-    mode can be DAC.NORMAL or DAC.CIRCULAR.
-
-    Example using both DACs at the same time:
-
-
-Modos:
-
-- DAC_NORMAL: saca muestras de un buffer y las manda a cierta tasa, enviando la secuencia una única vez.
-- DAC_CIRCULAR: saca muestras de un buffer y las manda a cierta tasa, repitiendo la secuencia en forma periodica.
 
 -----------------------------------------------------------------------
 
@@ -839,3 +689,50 @@ Evento interrupción de SPI: spiTransferCompleteInterrupt
 
 
 
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+
+
+
+## GPIO
+
+GPIO modela un único pin de entrada/salida de porpósito general. El valor de un
+pin es booleano.
+
+### Propiedades de GPIO
+
+**Propiedades de configuración**
+
+- ``mode`` (tipo ``gpioConfig_t``). Valores posibles:
+    - ``GPIO_INPUT`` *(valor por defecto)*. Posibles flags de modificación:
+        - ``GPIO_NOPULL`` *(valor por defecto)*
+        - ``GPIO_PULLUP``
+        - ``GPIO_PULLDOWN``
+        - ``GPIO_PULLUP | GPIO_PULLDOWN``
+        - ``GPIO_PULLUPDOWN``
+    - ``GPIO_OUTPUT``. Posibles flags de modificación:
+        - ``GPIO_PUSHPULL`` *(valor por defecto)*
+        - ``GPIO_PUSHPULL | GPIO_STRENGTH(i)`` (i = 0,...,7)
+        - ``GPIO_OPENCOLLECTOR`` ( es equivalente también ``GPIO_OPENDRAIN``)
+        - ``GPIO_OPENCOLLECTOR | GPIO_PULLUP``
+- ``speed`` (tipo ``gpioConfig_t``). Valores posibles:
+    - ``GPIO_SPEED(i)`` (i = 0,...,7)
+- ``power`` (tipo ``gpioConfig_t``). Valores posibles:
+    - ``ON`` *(valor por defecto)*, ``OFF``, ``ENABLE`` o ``DISABLE``
+
+**Propiedades de valor**
+
+**Propiedades de eventos por polling**
+
+- Nunguno.
+
+**Propiedades de eventos por interrupción**
+
+
+### Métodos de GPIO
+
+**Getters y Setters de todas sus propiedades**
+
+
+
+-------------------------------------------------------------------------------
