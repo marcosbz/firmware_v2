@@ -36,6 +36,10 @@ def bubble_sort(items):
                 items[j], items[j + 1] = items[j + 1], items[j]
 ```
 
+As Kanye West said:
+> We're living the future so
+> the present is our past.
+
 ### Saraza
 
 ``` c hl_lines="4"
