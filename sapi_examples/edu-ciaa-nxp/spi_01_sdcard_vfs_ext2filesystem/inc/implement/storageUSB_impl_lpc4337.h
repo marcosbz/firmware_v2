@@ -65,6 +65,7 @@
 
 /*==================[inclusions]=============================================*/
 #include "USB.h"
+#include <stdbool.h>
 #include "implement/device_impl_lpc4337.h"
 
 /*==================[cplusplus]==============================================*/

@@ -82,9 +82,13 @@ typedef enum
 /** \brief USB device type */
 typedef enum
 {
-
+   USB_DEVTYPE_DUMMY
 } usb_devType_t;
 
+typedef struct
+{
+
+} storageUSB_constructor_params_t;
 
 /*==================[external data declaration]==============================*/
 /** \brief StorageUSB class declaration. StorageUSB inherits from Device.
@@ -97,7 +101,7 @@ DeclareClass(StorageUSB, Device);
  **
  ** \return    The newly created Object
  **/
-StorageUSB StorageUSB_new(void);
+StorageUSB storageUSB_new(void);
 
 /** \brief USB device initialization sequence
  **
@@ -113,7 +117,7 @@ int storageUSB_init(StorageUSB self);
  ** \param[in] self USB device handle
  ** \return    Ready: Ready to operate, Busy: Must wait for new operation.
  **/
-mmc_status_t storageUSB_getStatus(StorageUSB self);
+usb_status_t storageUSB_getStatus(StorageUSB self);
 
 /** \brief Check if USB device present in slot
  **

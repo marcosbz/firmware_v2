@@ -46,6 +46,7 @@
 #include "ooc.h"
 #include "device.h"
 #include "mmcSPI.h"
+#include "storageUSB.h"
 
 /*==================[definiciones y macros]==================================*/
 
@@ -86,7 +87,7 @@ int main( void ){
    boardConfig();
 
    // SPI configuration
-   spiConfig( SPI0 );
+   //spiConfig( SPI0 );
 
    // Inicializar el conteo de Ticks con resolución de 10ms,
    // con tickHook diskTickHook
@@ -112,7 +113,8 @@ int main( void ){
 /*==================[definiciones de funciones internas]=====================*/
 void task(void)
 {
-   MmcSPI mmc0;
+   //MmcSPI mmc0;
+   StorageUSB usb0;
    filesystem_info_t *fs;
    file_desc_t *file0, *file1, *file2, *file3;
 
@@ -134,9 +136,12 @@ void task(void)
     */
 
    /* Create device and initialize it */
-   ooc_init_class(MmcSPI);
-   mmc0 = mmcSPI_new(); if(NULL == mmc0) while(1);
-   ret = mmcSPI_init(mmc0); //if(ret < 0) while(1);
+   //ooc_init_class(MmcSPI);
+   ooc_init_class(StorageUSB);
+   //mmc0 = mmcSPI_new(); if(NULL == mmc0) while(1);
+   usb0 = storageUSB_new(); if(NULL == usb0) while(1);
+   //ret = mmcSPI_init(mmc0); //if(ret < 0) while(1);
+   ret = storageUSB_init(usb0); //if(ret < 0) while(1);
    if(0 == ret)
    {
       // Turn ON LEDG if the write operation was successful
@@ -146,11 +151,13 @@ void task(void)
    {
          // Turn ON LEDR if the write operation was fail
          gpioWrite( LEDR, ON );
+         while(1);
    }
    //while(1);
 
    /* Create file system object with device and fs driver */
-   ret = filesystem_create(&fs, (Device) mmc0, &ext2_driver); if(ret < 0) while(1);
+   //ret = filesystem_create(&fs, (Device) mmc0, &ext2_driver); if(ret < 0) while(1);
+   ret = filesystem_create(&fs, (Device) usb0, &ext2_driver); if(ret < 0) while(1);
 
    /* format */
    /* Set ext2 format parameters */
@@ -162,14 +169,15 @@ void task(void)
    if(0 == ret)
    {
       // Turn ON LEDG if the write operation was successful
-      gpioWrite( LED3, ON );
+      gpioWrite( LED2, ON );
    }
    else
    {
       // Turn ON LEDR if the write operation was fail
       gpioWrite( LED1, ON );
+      while(1);
    }
-   while(1);
+   //while(1);
    /* mount */
    ret = vfs_mkdir("/mount", 0); if(ret < 0) while(1);
 
@@ -236,6 +244,9 @@ void task(void)
    lret = vfs_read(&file3, buffer, TEST_BUFFER_SIZE); if(lret != TEST_BUFFER_SIZE) while(1);
    ret = test_check_buffer(buffer, TEST_BUFFER_SIZE); if(ret < 0) while(1);
    ret = vfs_close(&file3); if(ret < 0) while(1);
+
+   gpioWrite( LED3, ON );
+   gpioWrite( LED2, OFF );
 }
 
 static void test_fill_buffer(uint8_t *buffer, uint16_t size)

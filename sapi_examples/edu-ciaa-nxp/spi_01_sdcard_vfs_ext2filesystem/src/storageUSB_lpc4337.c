@@ -47,7 +47,7 @@
 
 /** \brief StorageUSB class implementation file
  **
- ** Class of SD card driven by SPI
+ ** Class of usb storage device
  **
  **/
 
@@ -60,11 +60,11 @@
 #include <string.h>
 #include "board.h"
 #include "chip.h"
-#include "device.h"
-#include "implement/device_impl_lpc4337.h"
+#include "USB.h"
 #include "storageUSB.h"
 #include "implement/storageUSB_impl_lpc4337.h"
-
+#include "device.h"
+#include "implement/device_impl_lpc4337.h"
 /*==================[macros and definitions]=================================*/
 #define STORAGE_USB_BLOCKSIZE 512
 
@@ -147,7 +147,7 @@ static void StorageUSB_constructor( StorageUSB self, const void *params )
    storageUSB_constructor_params_t *storageusb_params;
    assert( ooc_isInitialized( StorageUSB ) );
    chain_constructor( StorageUSB, self, NULL );
-   storageusb_params = (storageusb_constructor_params_t *)params;	
+   storageusb_params = (storageUSB_constructor_params_t *)params;	
    if(storageusb_params != NULL)
    {
       /* TODO */
@@ -157,6 +157,7 @@ static void StorageUSB_constructor( StorageUSB self, const void *params )
       /* TODO */
    }
    self->FlashDisk_MS_Interface = &FlashDisk_MS_Interface0;
+   self->position = 0;
    self->status = USB_STATUS_UNINIT;
 }
 
@@ -179,18 +180,18 @@ static int StorageUSB_copy( StorageUSB self, const StorageUSB from )
 
 StorageUSB storageUSB_new(void)
 {
-   storageusb_constructor_params_t storageusb_params;
+   storageUSB_constructor_params_t storageusb_params;
    return (StorageUSB) ooc_new(StorageUSB, (void *)&storageusb_params);
 }
 
-mmc_status_t storageUSB_getStatus(StorageUSB self)
+usb_status_t storageUSB_getStatus(StorageUSB self)
 {
    return self->status;
 }
 
-int StorageUSB_init(StorageUSB self)
+int storageUSB_init(StorageUSB self)
 {
-   int ret = -1;
+   int ret = 1;
    uint8_t n;
 
 #if (defined(CHIP_LPC43XX) || defined(CHIP_LPC18XX))
@@ -206,30 +207,73 @@ int StorageUSB_init(StorageUSB self)
    USB_Init(self->FlashDisk_MS_Interface->Config.PortNumber, USB_MODE_Host);
    /* Hardware Initialization */
    Board_Debug_Init();
-   self->status = USB_STATUS_READY;
-   ret = 0;
+
+   /* Reset */
+   self->status = USB_STATUS_UNINIT;
+
+   /* Wait for card to be inserted */
+   while (USB_HostState[self->FlashDisk_MS_Interface->Config.PortNumber] != HOST_STATE_Configured) {
+      MS_Host_USBTask(self->FlashDisk_MS_Interface);
+      USB_USBTask(self->FlashDisk_MS_Interface->Config.PortNumber, USB_MODE_Host);
+   }
+
+   DEBUGOUT("Waiting for ready...");
+   for (;; )
+   {
+      uint8_t ErrorCode = MS_Host_TestUnitReady(self->FlashDisk_MS_Interface, 0);
+
+      if (!(ErrorCode)) {
+         break;
+      }
+
+      /* Check if an error other than a logical command error (device busy) received */
+      if (ErrorCode != MS_ERROR_LOGICAL_CMD_FAILED) {
+         DEBUGOUT("Failed\r\n");
+         USB_Host_SetDeviceConfiguration(self->FlashDisk_MS_Interface->Config.PortNumber, 0);
+         ret = -1;
+         break;
+      }
+   }
+   if(1 == ret)
+   {
+      DEBUGOUT("Done.\r\n");
+
+      if (0 == MS_Host_ReadDeviceCapacity(self->FlashDisk_MS_Interface, 0, &(self->DiskCapacity)))
+      {
+         DEBUGOUT(("%lu blocks of %lu bytes.\r\n"), self->DiskCapacity.Blocks, self->DiskCapacity.BlockSize);
+         self->status = USB_STATUS_READY;
+         ret = 0;
+      }
+      else
+      {
+         DEBUGOUT("Error retrieving device capacity.\r\n");
+         USB_Host_SetDeviceConfiguration(self->FlashDisk_MS_Interface->Config.PortNumber, 0);
+         ret = -1;
+      }
+   }
    return ret;
 }
 
 int storageUSB_isInserted(StorageUSB self)
 {
-   /* Always inserted */
-   return 1;
+   return (HOST_STATE_Unattached == USB_HostState[self->FlashDisk_MS_Interface->Config.PortNumber]) ? 0 : 1;
 }
 
 int storageUSB_singleBlockRead(StorageUSB self, uint8_t *readBlock, uint32_t sector)
 {
    int ret = -1;
 
-   if(MMC_STATUS_READY == self->status && sector < self->nsectors)
+   if(USB_STATUS_READY == self->status && sector < self->DiskCapacity.Blocks)
    {
-      if(RES_OK == disk_read(0, readBlock, sector, 1))
+      if(0 == MS_Host_ReadDeviceBlocks(self->FlashDisk_MS_Interface, 0, sector, 1,
+         self->DiskCapacity.BlockSize, (void *)readBlock))
       {
          ret = 0;
       }
       else
       {
-
+         DEBUGOUT("Error reading device block.\r\n");
+         /*USB_Host_SetDeviceConfiguration(FlashDisk_MS_Interface.Config.PortNumber, 0);*/
       }
    }
 
@@ -240,15 +284,17 @@ int storageUSB_singleBlockWrite(StorageUSB self, const uint8_t *writeBlock, uint
 {
    int ret = -1;
 
-   if(MMC_STATUS_READY == self->status && sector < self->nsectors)
+   if(USB_STATUS_READY == self->status && sector < self->DiskCapacity.Blocks)
    {
-      if(RES_OK == disk_write(0, writeBlock, sector, 1))
+      if(0 == MS_Host_WriteDeviceBlocks(self->FlashDisk_MS_Interface, 0, sector, 1,
+         self->DiskCapacity.BlockSize, (void *)writeBlock))
       {
          ret = 0;
       }
       else
       {
-
+         DEBUGOUT("Error writing device block.\r\n");
+         /*USB_Host_SetDeviceConfiguration(FlashDisk_MS_Interface.Config.PortNumber, 0);*/
       }
    }
 
@@ -261,11 +307,12 @@ int storageUSB_blockErase(StorageUSB self, uint32_t start, uint32_t end)
    uint32_t i;
    static const uint8_t zeroBlock[STORAGE_USB_BLOCKSIZE] = {0};
 
-   if(start <= end && end < self->nsectors)
+   if(start <= end && end < self->DiskCapacity.Blocks)
    {
       for(i = start; i <= end; i++)
       {
-         if(RES_OK != disk_write(0, zeroBlock, i, 1))
+         if(MS_Host_WriteDeviceBlocks(self->FlashDisk_MS_Interface, 0, i, 1,
+            self->DiskCapacity.BlockSize, (void *)zeroBlock))
          {
             break;
          }
@@ -280,7 +327,7 @@ int storageUSB_blockErase(StorageUSB self, uint32_t start, uint32_t end)
 
 uint32_t storageUSB_getSize(StorageUSB self)
 {
-   return self->nsectors;
+   return self->DiskCapacity.Blocks;
 }
 
 /* BlockDevice interface implementation */
@@ -290,11 +337,11 @@ static ssize_t storageUSB_read(StorageUSB self, uint8_t * const buf, size_t cons
    size_t bytes_left, bytes_read, i, sector, position, bytes_offset;
    assert(ooc_isInstanceOf(self, StorageUSB));
 
-   i=0; bytes_left = nbyte; sector = self->position / self->block_size; position = self->position;
+   i=0; bytes_left = nbyte; sector = self->position / self->DiskCapacity.BlockSize; position = self->position;
    while(bytes_left)
    {
-      bytes_offset = position % self->block_size;
-      bytes_read = (bytes_left > (self->block_size - bytes_offset)) ? (self->block_size - bytes_offset) : bytes_left;
+      bytes_offset = position % self->DiskCapacity.BlockSize;
+      bytes_read = (bytes_left > (self->DiskCapacity.BlockSize - bytes_offset)) ? (self->DiskCapacity.BlockSize - bytes_offset) : bytes_left;
       if(storageUSB_singleBlockRead(self, self->block_buf, sector) == 0)
       {
          memcpy(buf + i, self->block_buf + bytes_offset, bytes_read);
@@ -327,11 +374,11 @@ static ssize_t storageUSB_write(StorageUSB self, uint8_t const * const buf, size
    size_t bytes_left, bytes_write, i, sector, position, bytes_offset;
    assert(ooc_isInstanceOf(self, StorageUSB));
 
-   i=0; bytes_left = nbyte; sector = self->position / self->block_size; position = self->position;
+   i=0; bytes_left = nbyte; sector = self->position / self->DiskCapacity.BlockSize; position = self->position;
    while(bytes_left)
    {
-      bytes_offset = position % self->block_size;
-      bytes_write = bytes_left > (self->block_size - bytes_offset) ? (self->block_size - bytes_offset) : bytes_left;
+      bytes_offset = position % self->DiskCapacity.BlockSize;
+      bytes_write = bytes_left > (self->DiskCapacity.BlockSize - bytes_offset) ? (self->DiskCapacity.BlockSize - bytes_offset) : bytes_left;
       //printf("storageUSB_write(): bytes_left: %d bytes_write: %d sector: %d\n",
       //                  bytes_left, bytes_write, sector);
       if(storageUSB_singleBlockRead(self, self->block_buf, sector) == 0)
@@ -370,7 +417,7 @@ static ssize_t storageUSB_lseek(StorageUSB self, off_t const offset, uint8_t con
 {
    assert(ooc_isInstanceOf(self, StorageUSB));
    off_t destination = -1;
-   size_t partition_size = self->block_size * self->nsectors;
+   size_t partition_size = self->DiskCapacity.BlockSize * self->DiskCapacity.Blocks;
 
    switch(whence)
    {
@@ -404,8 +451,8 @@ static int storageUSB_ioctl(StorageUSB self, int32_t request, void* param)
    switch(request)
    {
       case IOCTL_BLOCK_GETINFO:
-         blockInfo->size = self->block_size;
-         blockInfo->num = self->nsectors;
+         blockInfo->size = self->DiskCapacity.BlockSize;
+         blockInfo->num = self->DiskCapacity.Blocks;
          ret = 1;
          break;
       default:
@@ -430,7 +477,6 @@ static int storageUSB_getState(StorageUSB self, blockDevState_t *state)
 {
    assert(ooc_isInstanceOf(self, StorageUSB));
    return self->status;
-   return 0;
 }
 
 static int storageUSB_getInfo(StorageUSB self, blockDevInfo_t *info)
@@ -539,52 +585,6 @@ void EVENT_USB_Host_DeviceEnumerationFailed(const uint8_t corenum,
 			  " -- In State %d\r\n" ),
 			 corenum, ErrorCode, SubErrorCode, USB_HostState[corenum]);
 
-}
-
-/* Get the disk data structure */
-DISK_HANDLE_T *FSUSB_DiskInit(void)
-{
-	return &FlashDisk_MS_Interface0;
-}
-
-/* Wait for disk to be inserted */
-int FSUSB_DiskInsertWait(DISK_HANDLE_T *hDisk)
-{
-	while (USB_HostState[hDisk->Config.PortNumber] != HOST_STATE_Configured) {
-		MS_Host_USBTask(hDisk);
-		USB_USBTask(hDisk->Config.PortNumber, USB_MODE_Host);
-	}
-	return 1;
-}
-
-/* Disk acquire function that waits for disk to be ready */
-int FSUSB_DiskAcquire(DISK_HANDLE_T *hDisk)
-{
-	DEBUGOUT("Waiting for ready...");
-	for (;; ) {
-		uint8_t ErrorCode = MS_Host_TestUnitReady(hDisk, 0);
-
-		if (!(ErrorCode)) {
-			break;
-		}
-
-		/* Check if an error other than a logical command error (device busy) received */
-		if (ErrorCode != MS_ERROR_LOGICAL_CMD_FAILED) {
-			DEBUGOUT("Failed\r\n");
-			USB_Host_SetDeviceConfiguration(hDisk->Config.PortNumber, 0);
-			return 0;
-		}
-	}
-	DEBUGOUT("Done.\r\n");
-
-	if (MS_Host_ReadDeviceCapacity(hDisk, 0, &DiskCapacity)) {
-		DEBUGOUT("Error retrieving device capacity.\r\n");
-		USB_Host_SetDeviceConfiguration(hDisk->Config.PortNumber, 0);
-		return 0;
-	}
-
-	DEBUGOUT(("%lu blocks of %lu bytes.\r\n"), DiskCapacity.Blocks, DiskCapacity.BlockSize);
-	return 1;
 }
 
 /** @} doxygen end group definition */
