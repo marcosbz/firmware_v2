@@ -33,12 +33,12 @@
  *
  */
 
-#ifndef EXT2_H
-#define EXT2_H
+#ifndef FAT_H
+#define FAT_H
 
-/** \brief EXT2 driver header file
+/** \brief FAT driver header file
  **
- ** This is the header file of the ext2 file system implementation
+ ** This is the header file of the fat file system implementation
  **
  **/
 
@@ -46,7 +46,7 @@
  ** @{ */
 /** \addtogroup MTests CIAA Firmware Module Tests
  ** @{ */
-/** \addtogroup Filesystem EXT2
+/** \addtogroup Filesystem FAT
  ** @{ */
 
 /*
@@ -69,76 +69,23 @@
 /*==================[macros]=================================================*/
 
 /** \brief Maximum quantity of simultaneous mounts */
-#define EXT2_MAX_MOUNTS 32
+#define FAT_MAX_MOUNTS 32
 /** \brief Size of array ext2_block_buffer defined in ext2.c. Its used to read and write portions of blocks */
-#define EXT2_BLOCK_BUFFER_SIZE 1024
-/** \brief ext2_block_buffer */
-#define EXT2_PATH_MAX 50
+#define FAT_BLOCK_BUFFER_SIZE 1024
+/** \brief fat_block_buffer */
+#define FAT_PATH_MAX 50
 
-/** \brief Blank block size */
-#define EXT2_BBSIZE      1024
-/** \brief Superblock size */
-#define EXT2_SBSIZE      1024
-/** \brief Blank block offset */
-#define   EXT2_BBOFF     0
-/** \brief Superblock offset */
-#define   EXT2_SBOFF      (EXT2_BBOFF + EXT2_BBSIZE)
-
-/** \brief ext2fs magic number */
-#define EXT2_MAGIC  0xef53U
-
-/** \brief How much direct block addresses contains the inode */
-#define N_DIRECT_BLOCKS      11
-/** \brief How much INdirect block addresses contains the inode */
-#define N_INDIRECT_BLOCKS   3
 
 /** \brief Special inode numbers */
-#define   EXT2_RESERVED_INODES   10
-#define   EXT2_BADBLKINO         1
-#define   EXT2_ROOTINO           2
-#define   EXT2_ACLIDXINO         3
-#define   EXT2_ACLDATAINO        4
-#define   EXT2_BOOTLOADERINO     5
-#define   EXT2_UNDELDIRINO       6
-#define   EXT2_RESIZEINO         7
-#define   EXT2_JOURNALINO        8
-#define   EXT2_FIRSTINO          11
+//#define   EXT2_RESERVED_INODES   10
+//#define   EXT2_BADBLKINO         1
+//...
 
-#define   EXT2_MAXNAMELEN   255
+#define   FAT_MAXNAMELEN   255
 
-/** \brief ext2 file types */
-#define EXT2_FT_UNKNOWN         0   /* Unknown File Type */
-#define EXT2_FT_REG_FILE        1   /* Regular File */
-#define EXT2_FT_DIR             2   /* Directory File */
-#define EXT2_FT_CHRDEV          3   /* Character Device */
-#define EXT2_FT_BLKDEV          4   /* Block Device */
-#define EXT2_FT_FIFO            5   /* Buffer File */
-#define EXT2_FT_SOCK            6   /* Socket File */
-#define EXT2_FT_SYMLINK         7   /* Symbolic Link */
-
-/** \brief Ext2 i_mode values */
-#define EXT2_S_IFSOCK  0xC000   /* socket */
-#define EXT2_S_IFLNK   0xA000   /* symbolic link */
-#define EXT2_S_IFREG   0x8000   /* regular file */
-#define EXT2_S_IFBLK   0x6000   /* block device */
-#define EXT2_S_IFDIR   0x4000   /* directory */
-#define EXT2_S_IFCHR   0x2000   /* character device */
-#define EXT2_S_IFIFO   0x1000   /* fifo */
-
-/** \brief ext2 directory entry values */
-
-/* inode(4) + rec_len(2) + name_len(1) + file_type(1), doesnt include name  */
-#define DENTRY_MIN_SIZE 8
-
-#define DENTRY_USED_SIZE(d) (DENTRY_MIN_SIZE + (d)->name_len)
-/* size with padding, aligned to 4 bytes */
-#define DENTRY_TOTAL_SIZE(d) (  DENTRY_USED_SIZE(d) + ( (DENTRY_USED_SIZE(d) & 0x03) ? \
-                             (4 - (DENTRY_USED_SIZE(d) & 0x03)) : 0 )  )
-
-/* Format parameters constants */
-#define EXT2_MIN_BLOCKSIZE 1024
-#define EXT2_MAX_BLOCKSIZE 4096
-#define EXT2_DEFAULT_BLOCKNODE_FACTOR 4
+/** \brief fat file types */
+//#define EXT2_FT_UNKNOWN         0   /* Unknown File Type */
+//...
 
 /* Bitmap handle macros */
 /* Set the bit i from array */
@@ -157,8 +104,6 @@
 /* Misc macros */
 /* Check if power of 2 */
 #define is_powerof2(x) (( (x) != 0 ) && !( (x) & ( (x) - 1)))
-
-
 
 /*==================[typedef]================================================*/
 
@@ -284,45 +229,95 @@ typedef struct ext2_inode
    uint32_t   i_osd2[3];       /* 116: OS dependent value */
 } ext2_inode_t;
 
-/** \brief ext2 file system
+/** \brief fat file system
  **
- ** ext2 file system information
+ ** fat file system information
  **
  **/
-typedef struct ext2_fs_info
+
+//typedef struct ext2_fs_info
+//{
+//   ext2_superblock_t e2sb;
+//   uint32_t   s_block_size;         /* Block size in bytes. */
+//   uint32_t   s_inodes_per_block;   /* Number of inodes per block */
+//   uint32_t   s_itb_per_group;      /* Number of inode table blocks per group */
+//   uint32_t   s_ginfodb_count;      /* Number of group descriptor blocks */
+//   uint32_t   s_desc_per_block;     /* Number of group descriptors per block */
+//   uint32_t   s_groups_count;       /* Number of groups in the fs */
+//   uint8_t    sectors_in_block;     /* Sector is 512 bytes long */
+//   uint16_t   s_buff_size;          /* Size of the block chunks to be read in buffer */
+//   uint8_t    s_buff_per_block;     /* How much chunks per block */
+//} ext2_fs_info_t;
+
+typedef struct fat_fs_info
 {
-   ext2_superblock_t e2sb;
-   uint32_t   s_block_size;         /* Block size in bytes. */
-   uint32_t   s_inodes_per_block;   /* Number of inodes per block */
-   uint32_t   s_itb_per_group;      /* Number of inode table blocks per group */
-   uint32_t   s_ginfodb_count;      /* Number of group descriptor blocks */
-   uint32_t   s_desc_per_block;     /* Number of group descriptors per block */
-   uint32_t   s_groups_count;       /* Number of groups in the fs */
-   uint8_t    sectors_in_block;     /* Sector is 512 bytes long */
-   uint16_t   s_buff_size;          /* Size of the block chunks to be read in buffer */
-   uint8_t    s_buff_per_block;     /* How much chunks per block */
-} ext2_fs_info_t;
+  off_t    fs_hwsectorsize;        /* HW: Sector size reported by block driver*/
+  off_t    fs_hwnsectors;          /* HW: The number of sectors reported by the hardware */
+  off_t    fs_fatbase;             /* Logical block of start of filesystem (past resd sectors) */
+  off_t    fs_rootbase;            /* MBR: Cluster no. of 1st cluster of root dir */
+  off_t    fs_database;            /* Logical block of start data sectors */
+  off_t    fs_fsinfo;              /* MBR: Sector number of FSINFO sector */
+  off_t    fs_currentsector;       /* The sector number buffered in fs_buffer */
+  uint32_t fs_nclusters;           /* Maximum number of data clusters */
+  uint32_t fs_nfatsects;           /* MBR: Count of sectors occupied by one fat */
+  uint32_t fs_fattotsec;           /* MBR: Total count of sectors on the volume */
+  uint32_t fs_fsifreecount;        /* FSI: Last free cluster count on volume */
+  uint32_t fs_fsinextfree;         /* FSI: Cluster number of 1st free cluster */
+  uint16_t fs_fatresvdseccount;    /* MBR: The total number of reserved sectors */
+  uint16_t fs_rootentcnt;          /* MBR: Count of 32-bit root directory entries */
+  bool     fs_mounted;             /* true: The file system is ready */
+  bool     fs_dirty;               /* true: fs_buffer is dirty */
+  bool     fs_fsidirty;            /* true: FSINFO sector must be written to disk */
+  uint8_t  fs_type;                /* FSTYPE_FAT12, FSTYPE_FAT16, or FSTYPE_FAT32 */
+  uint8_t  fs_fatnumfats;          /* MBR: Number of FATs (probably 2) */
+  uint8_t  fs_fatsecperclus;       /* MBR: Sectors per allocation unit: 2**n, n=0..7 */
+  uint8_t *fs_buffer;              /* This is an allocated buffer to hold one sector
+                                    * from the device */
+} fat_fs_info_t;;
 
 /** \brief ext2 file info
  **
  ** ext2 file information
  ** TODO: Is it necessary to keep f_pointer? f_group (can be calculated from f_inumber)? f_size (already in upper layer)?
  **/
-typedef struct ext2_file_info
-{
-   //ext2_inode_t        *pinode;        /* Copy of on-disk inode */
-   //uint16_t            f_group;     /* Block group number in which the node resides */
-   uint32_t            f_pointer;   /* Local seek pointer */
-   uint32_t            f_inumber;   /* Inode number */
-   uint32_t            f_size;
-} ext2_file_info_t;
+//typedef struct ext2_file_info
+//{
+//   //ext2_inode_t        *pinode;        /* Copy of on-disk inode */
+//   //uint16_t            f_group;     /* Block group number in which the node resides */
+//   uint32_t            f_pointer;   /* Local seek pointer */
+//   uint32_t            f_inumber;   /* Inode number */
+//   uint32_t            f_size;
+//} ext2_file_info_t;
 
-typedef struct ext2_format_param
+typedef struct fat_file_info
+{
+  struct fat_file_s *ff_next;      /* Retained in a singly linked list */
+  uint8_t  ff_bflags;              /* The file buffer flags */
+  uint8_t  ff_oflags;              /* Flags provided when file was opened */
+  uint8_t  ff_sectorsincluster;    /* Sectors remaining in cluster */
+  uint16_t ff_dirindex;            /* Index into ff_dirsector to directory entry */
+  uint32_t ff_currentcluster;      /* Current cluster being accessed */
+  off_t    ff_dirsector;           /* Sector containing the directory entry */
+  off_t    ff_size;                /* Size of the file in bytes */
+  off_t    ff_startcluster;        /* Start cluster of file on media */
+  off_t    ff_currentsector;       /* Current sector being operated on */
+  off_t    ff_cachesector;         /* Current sector in the file buffer */
+  uint8_t *ff_buffer;              /* File buffer (for partial sector accesses) */
+} fat_file_info_t;
+
+
+//typedef struct ext2_format_param
+//{
+//   uint32_t partition_size;
+//   uint16_t block_size; /* Valid block_size values are 1024, 2048 and 4096 bytes per block */
+//   uint8_t block_node_factor; /* blocks/nodes. Default is 4 */
+//} ext2_format_param_t;
+typedef struct fat_format_param
 {
    uint32_t partition_size;
    uint16_t block_size; /* Valid block_size values are 1024, 2048 and 4096 bytes per block */
    uint8_t block_node_factor; /* blocks/nodes. Default is 4 */
-} ext2_format_param_t;
+} fat_format_param_t;
 /*==================[external data declaration]==============================*/
 
 /*==================[external functions declaration]=========================*/
