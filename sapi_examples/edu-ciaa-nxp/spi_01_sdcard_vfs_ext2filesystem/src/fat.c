@@ -1520,28 +1520,28 @@ static size_t ext2_file_write(file_desc_t *desc, void *buf, size_t size)
 
 
 
-static int ext2_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, uint32_t *total_read_size_p)
+static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, uint32_t *total_read_size_p)
 {
    /* FIXME: If size>finfo->f_size error or truncate? */
    int ret;
-   uint32_t file_block, block_offset;
-   uint32_t device_block, device_offset;
-   uint16_t block_size, block_shift, block_mask;
-   uint32_t total_remainder_size, block_remainder, read_size, buf_pos;
-   ext2_file_info_t *finfo;
-   ext2_fs_info_t *fsinfo;
+   uint32_t file_cluster, cluster_offset;
+   uint32_t device_cluster, device_offset;
+   uint16_t cluster_size, cluster_shift, cluster_mask;
+   uint32_t total_remainder_size, cluster_remainder, read_size, buf_pos;
+   fat_file_info_t *finfo;
+   fat_fs_info_t *fsinfo;
    Device dev;
 
    fsinfo = dest_node->fs_info->down_layer_info;
    finfo = dest_node->f_info.down_layer_info;
    dev = dest_node->fs_info->device;
 
-   block_size = fsinfo->s_block_size;
-   block_shift = (uint16_t)fsinfo->e2sb.s_log_block_size + 10;
-   block_mask = (uint32_t)block_size-1;
+   cluster_size = fsinfo->s_block_size;
+   cluster_shift = (uint16_t)fsinfo->e2sb.s_log_block_size + 10;
+   cluster_mask = (uint32_t)block_size-1;
 
-   file_block = finfo->f_pointer >> block_shift;
-   block_offset = finfo->f_pointer & block_mask;
+   file_cluster = finfo->f_pointer >> cluster_shift;
+   cluster_offset = finfo->f_pointer & cluster_mask;
 
    if(NULL != total_read_size_p)
       *total_read_size_p = 0;
@@ -1568,10 +1568,10 @@ static int ext2_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, 
    for(   total_remainder_size = size, buf_pos = 0;
       total_remainder_size>0;)
    {
-      file_block = finfo->f_pointer >> block_shift;
-      block_offset = finfo->f_pointer & block_mask;
-      ret = ext2_block_map(dest_node, file_block, &device_block);
-      ASSERT_MSG(0 == ret, "ext2_buf_read_file(): ext2_block_map() failed");
+      file_cluster = finfo->f_pointer >> cluster_shift;
+      cluster_offset = finfo->f_pointer & cluster_mask;
+      ret = fat_cluster_map(dest_node, file_cluster, &device_cluster);
+      ASSERT_MSG(0 == ret, "fat_buf_read_file(): fat_cluster_map() failed");
       if(ret)
       {
          if(NULL != total_read_size_p)
@@ -1586,7 +1586,7 @@ static int ext2_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, 
       else
          read_size = total_remainder_size;
 
-      ret = ext2_device_buf_read(dev, (uint8_t *)(buf+buf_pos), device_offset, read_size);
+      ret = fat_device_buf_read(dev, (uint8_t *)(buf+buf_pos), device_offset, read_size);
       ASSERT_MSG(0 == ret, "ext2_buf_read_file(): ext2_device_buf_read() failed");
       if(ret)
       {
