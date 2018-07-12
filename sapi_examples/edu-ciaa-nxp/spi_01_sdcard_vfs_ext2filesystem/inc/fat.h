@@ -249,6 +249,12 @@ typedef struct ext2_inode
 //   uint8_t    s_buff_per_block;     /* How much chunks per block */
 //} ext2_fs_info_t;
 
+//struct fat_fs_info {
+//	struct volinfo vi;
+//	struct block_dev *bdev;
+//	struct node *root;
+//};
+
 typedef struct fat_fs_info
 {
   off_t    fs_hwsectorsize;        /* HW: Sector size reported by block driver*/
@@ -288,6 +294,19 @@ typedef struct fat_fs_info
 //   uint32_t            f_inumber;   /* Inode number */
 //   uint32_t            f_size;
 //} ext2_file_info_t;
+
+//struct fat_file_info {
+//	struct fat_fs_info *fsi;
+//	struct volinfo *volinfo;		/* vol_info_t used to open this file */
+//	uint32_t dirsector;			/* physical sector containing dir entry of this file */
+//	uint8_t diroffset;			/* # of this entry within the dir sector */
+//	int mode;				    /* mode in which this file was opened */
+//	uint32_t firstcluster;		/* first cluster of file */
+//	uint32_t filelen;			/* byte length of file */
+//
+//	uint32_t cluster;			/* current cluster */
+//	uint32_t pointer;			/* current (BYTE) pointer */
+//};
 
 typedef struct fat_file_info
 {

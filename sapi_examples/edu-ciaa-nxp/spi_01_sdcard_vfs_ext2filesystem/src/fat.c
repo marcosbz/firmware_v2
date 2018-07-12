@@ -1536,9 +1536,9 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
    finfo = dest_node->f_info.down_layer_info;
    dev = dest_node->fs_info->device;
 
-   cluster_size = fsinfo->s_block_size;
-   cluster_shift = (uint16_t)fsinfo->e2sb.s_log_block_size + 10;
-   cluster_mask = (uint32_t)block_size-1;
+   cluster_size = fsinfo->cluster_size;
+   cluster_shift = (uint16_t)fsinfo->log_cluster_size;
+   cluster_mask = (uint32_t)cluster_size-1;
 
    file_cluster = finfo->f_pointer >> cluster_shift;
    cluster_offset = finfo->f_pointer & cluster_mask;
@@ -1553,10 +1553,10 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
       size = finfo->f_size - finfo->f_pointer;
 
    /* Must read total_remainder_size bytes from file.
-    * Cant read all in a row. It must be read block by block.
-    * First the disk block must be retrieved, which matches the actual file pointer.
-    * Start reading this block in position (offset%block_size).
-    * Must read at most to the end of this block.
+    * Cant read all in a row. It must be read cluster by cluster.
+    * First the disk cluster must be retrieved, which matches the actual file pointer.
+    * Start reading this cluster in position (offset%cluster_size).
+    * Must read at most to the end of this cluster.
     * Copy chunk of read data to buffer.
     * Subtract read bytes from total_remainder_size. Add read bytes to fpointer.
     * Check loop condition and repeat iteration if valid
@@ -1578,11 +1578,11 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
             *total_read_size_p = buf_pos;
          return ret;
       }
-      device_offset = (device_block << block_shift) + block_offset;
+      device_offset = (device_cluster << cluster_shift) + cluster_offset;
 
-      block_remainder = block_size - block_offset;
-      if(total_remainder_size > block_remainder)
-         read_size = block_remainder;
+      cluster_remainder = cluster_size - cluster_offset;
+      if(total_remainder_size > cluster_remainder)
+         read_size = cluster_remainder;
       else
          read_size = total_remainder_size;
 
@@ -1601,7 +1601,7 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
 
    if(NULL != total_read_size_p)
       *total_read_size_p = buf_pos;
-   ASSERT_MSG(buf_pos == size, "ext2_buf_read_file(): buf_pos == size failed");
+   ASSERT_MSG(buf_pos == size, "fat_buf_read_file(): buf_pos == size failed");
    if(buf_pos != size)
       return -1;
 
