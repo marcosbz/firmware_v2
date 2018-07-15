@@ -1608,6 +1608,7 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
    return 0;
 }
 
+#if 0
 /* Map file block number to disk block number
  *
  */
@@ -1713,7 +1714,88 @@ static int ext2_block_map(vnode_t * dest_node, uint32_t file_block, uint32_t *de
    *device_block_p = temp_block_num;
    return 0;
 }
+#endif
 
+uint32_t fat_get_fat_(struct fat_fs_info *fsi,
+		uint8_t *p_scratch,	uint32_t *p_scratchcache, uint32_t cluster) {
+	uint32_t offset, sector, result;
+	struct volinfo *volinfo = &fsi->vi;
+
+	switch (volinfo->filesystem) {
+		case FAT12:
+			offset = cluster + (cluster / 2);
+			break;
+		case FAT16:
+			offset = cluster * 2;
+			break;
+		case FAT32:
+			offset = cluster * 4;
+			break;
+		default:
+			return DFS_BAD_CLUS;
+	}
+
+	sector = offset / volinfo->bytepersec + volinfo->fat1;
+
+	if (sector != *p_scratchcache) {
+		if (fat_read_sector(fsi, p_scratch, sector)) {
+			/*
+			 * avoid anyone assuming that this cache value is still valid,
+			 * which might cause disk corruption
+			 */
+			*p_scratchcache = 0;
+			return DFS_BAD_CLUS;
+		}
+		*p_scratchcache = sector;
+	}
+
+	/*
+	 * At this point, we "merely" need to extract the relevant entry.
+	 * This is easy for FAT16 and FAT32, but a royal PITA for FAT12 as
+	 * a single entry may span a sector boundary. The normal way around this is
+	 * always to read two FAT sectors, but that luxury is (by design intent)
+	 * unavailable to DOSFS.
+	 */
+	offset %= volinfo->bytepersec;
+	if (volinfo->filesystem == FAT12) {
+		/* Special case for sector boundary - Store last byte of current sector
+		 * Then read in the next sector and put the first byte of that sector
+		 * into the high byte of result.
+		 */
+		if (offset == volinfo->bytepersec - 1) {
+			result = (uint32_t) p_scratch[offset];
+			sector++;
+			if (fat_read_sector(fsi, p_scratch, sector)) {
+				/*
+				 * avoid anyone assuming that this cache value is still valid,
+				 *  which might cause disk corruption
+				 */
+				*p_scratchcache = 0;
+				return DFS_BAD_CLUS;
+			}
+			*p_scratchcache = sector;
+			result |= ((uint32_t) p_scratch[0]) << 8;
+		} else {
+			result = (uint32_t) p_scratch[offset] |
+			  ((uint32_t) p_scratch[offset+1]) << 8;
+		}
+		if (cluster & 1)
+			result = result >> 4;
+		else
+			result = result & 0xfff;
+	} else if (volinfo->filesystem == FAT16) {
+		result = (uint32_t) p_scratch[offset] |
+		  ((uint32_t) p_scratch[offset+1]) << 8;
+	} else if (volinfo->filesystem == FAT32) {
+		result = ((uint32_t) p_scratch[offset] |
+		  ((uint32_t) p_scratch[offset+1]) << 8 |
+		  ((uint32_t) p_scratch[offset+2]) << 16 |
+		  ((uint32_t) p_scratch[offset+3]) << 24) & 0x0fffffff;
+	} else
+		result = DFS_BAD_CLUS;
+
+	return result;
+}
 
 
 static int ext2_mount_load(vnode_t *dir_node)
