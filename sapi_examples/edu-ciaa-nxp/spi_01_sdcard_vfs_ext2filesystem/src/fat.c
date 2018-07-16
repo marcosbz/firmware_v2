@@ -1716,22 +1716,20 @@ static int ext2_block_map(vnode_t * dest_node, uint32_t file_block, uint32_t *de
 }
 #endif
 
-uint32_t fat_cluster_map(vnode_t * dest_node, uint32_t file_cluster, uint32_t *device_block_p)
+uint32_t fat_cluster_map(vnode_t * dest_node, uint32_t file_cluster, uint32_t *device_cluster_p)
 {
-   uint32_t fat_entry_offset, result;
-   struct volinfo *volinfo = &fsi->vi;
+   uint32_t fat_entry_offset, result, temp_cluster_num;
 
    int ret;
    ext2_file_info_t *finfo;
    ext2_fs_info_t *fsinfo;
    Device dev;
-   ext2_inode_t *pinode;
 
    dev = dest_node->fs_info->device;
    fsinfo = dest_node->fs_info->down_layer_info;
    finfo = dest_node->f_info.down_layer_info;
-   n_entries_per_block = fsinfo->s_block_size / sizeof(uint32_t);
 
+   *device_cluster_p = FAT_BAD_CLUSTER; /* Return this value if error */
    switch (fsinfo->fat_version)
    {
       case FAT12:
@@ -1744,59 +1742,36 @@ uint32_t fat_cluster_map(vnode_t * dest_node, uint32_t file_cluster, uint32_t *d
          fat_entry_offset = file_cluster * 4;
          break;
       default:
-         return DFS_BAD_CLUS;
+         return -1;
    }
 
    disk_entry_offset = fsinfo->fat_offset + fat_entry_offset;
+   if(ext2_device_buf_read(dev, (uint8_t *)&temp_cluster_num, disk_entry_offset, 4))
+   {
+      return -1;
+   }
 
    if (fsinfo->fat_version == FAT12)
    {
-      /* Special case for sector boundary - Store last byte of current sector
-       * Then read in the next sector and put the first byte of that sector
-       * into the high byte of result.
-       */
-      if (offset == volinfo->bytepersec - 1) {
-      result = (uint32_t) p_scratch[offset];
-      sector++;
-      if(ext2_device_buf_read(dev, (uint8_t *)temp_block_num, index_offset, sizeof(uint32_t)))
-      if (fat_read_sector(fsi, p_scratch, sector))
-      {
-         /*
-          * avoid anyone assuming that this cache value is still valid,
-          *  which might cause disk corruption
-          */
-         *p_scratchcache = 0;
-         return DFS_BAD_CLUS;
-      }
-      *p_scratchcache = sector;
-      result |= ((uint32_t) p_scratch[0]) << 8;
-   }
-   else
-   {
-      result = (uint32_t) p_scratch[offset] |
-      ((uint32_t) p_scratch[offset+1]) << 8;
-   }
-   if (cluster & 1)
-      result = result >> 4;
-   else
-      result = result & 0xfff;
+      if (file_cluster & 1)
+         *device_cluster_p = (temp_cluster_num >> 4) & 0xfff; /* Read from bit 8 to 24, take only last 12 bits */
+      else
+         *device_cluster_p = temp_cluster_num & 0xfff; /* Read from bit 0 to 16, take only first 12 bits */
    }
    else if (fsinfo->fat_version == FAT16)
    {
-      result = (uint32_t) p_scratch[offset] |
-      ((uint32_t) p_scratch[offset+1]) << 8;
+      *device_cluster_p = temp_cluster_num & 0xffff; /* Take only first 16 bits */
    }
    else if (fsinfo->fat_version == FAT32)
    {
-      result = ((uint32_t) p_scratch[offset] |
-               ((uint32_t) p_scratch[offset+1]) << 8 |
-               ((uint32_t) p_scratch[offset+2]) << 16 |
-               ((uint32_t) p_scratch[offset+3]) << 24) & 0x0fffffff;
+      *device_cluster_p = temp_cluster_num & 0x0fffffff;
    }
    else
-      result = DFS_BAD_CLUS;
+   {
+      return -1;
+   }
 
-   return result;
+   return 0;
 }
 
 
