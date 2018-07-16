@@ -1718,7 +1718,7 @@ static int ext2_block_map(vnode_t * dest_node, uint32_t file_block, uint32_t *de
 
 uint32_t fat_cluster_map(vnode_t * dest_node, uint32_t file_cluster, uint32_t *device_block_p)
 {
-   uint32_t offset, sector, result;
+   uint32_t fat_entry_offset, result;
    struct volinfo *volinfo = &fsi->vi;
 
    int ret;
@@ -1732,46 +1732,24 @@ uint32_t fat_cluster_map(vnode_t * dest_node, uint32_t file_cluster, uint32_t *d
    finfo = dest_node->f_info.down_layer_info;
    n_entries_per_block = fsinfo->s_block_size / sizeof(uint32_t);
 
-   switch (volinfo->filesystem)
+   switch (fsinfo->fat_version)
    {
       case FAT12:
-         offset = cluster + (cluster / 2);
+         fat_entry_offset = file_cluster + (file_cluster / 2);
          break;
       case FAT16:
-         offset = cluster * 2;
+         fat_entry_offset = file_cluster * 2;
          break;
       case FAT32:
-         offset = cluster * 4;
+         fat_entry_offset = file_cluster * 4;
          break;
       default:
          return DFS_BAD_CLUS;
    }
 
-   sector = offset / volinfo->bytepersec + volinfo->fat1;
+   disk_entry_offset = fsinfo->fat_offset + fat_entry_offset;
 
-   if (sector != *p_scratchcache)
-   {
-      if (fat_read_sector(fsi, p_scratch, sector))
-      {
-         /*
-	  * avoid anyone assuming that this cache value is still valid,
-	  * which might cause disk corruption
-	  */
-         *p_scratchcache = 0;
-	 return DFS_BAD_CLUS;
-      }
-      *p_scratchcache = sector;
-   }
-
-   /*
-    * At this point, we "merely" need to extract the relevant entry.
-    * This is easy for FAT16 and FAT32, but a royal PITA for FAT12 as
-    * a single entry may span a sector boundary. The normal way around this is
-    * always to read two FAT sectors, but that luxury is (by design intent)
-    * unavailable to DOSFS.
-    */
-   offset %= volinfo->bytepersec;
-   if (volinfo->filesystem == FAT12)
+   if (fsinfo->fat_version == FAT12)
    {
       /* Special case for sector boundary - Store last byte of current sector
        * Then read in the next sector and put the first byte of that sector
@@ -1780,6 +1758,7 @@ uint32_t fat_cluster_map(vnode_t * dest_node, uint32_t file_cluster, uint32_t *d
       if (offset == volinfo->bytepersec - 1) {
       result = (uint32_t) p_scratch[offset];
       sector++;
+      if(ext2_device_buf_read(dev, (uint8_t *)temp_block_num, index_offset, sizeof(uint32_t)))
       if (fat_read_sector(fsi, p_scratch, sector))
       {
          /*
@@ -1802,12 +1781,12 @@ uint32_t fat_cluster_map(vnode_t * dest_node, uint32_t file_cluster, uint32_t *d
    else
       result = result & 0xfff;
    }
-   else if (volinfo->filesystem == FAT16)
+   else if (fsinfo->fat_version == FAT16)
    {
       result = (uint32_t) p_scratch[offset] |
       ((uint32_t) p_scratch[offset+1]) << 8;
    }
-   else if (volinfo->filesystem == FAT32)
+   else if (fsinfo->fat_version == FAT32)
    {
       result = ((uint32_t) p_scratch[offset] |
                ((uint32_t) p_scratch[offset+1]) << 8 |
