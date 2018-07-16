@@ -1721,6 +1721,17 @@ uint32_t fat_cluster_map(vnode_t * dest_node, uint32_t file_cluster, uint32_t *d
    uint32_t offset, sector, result;
    struct volinfo *volinfo = &fsi->vi;
 
+   int ret;
+   ext2_file_info_t *finfo;
+   ext2_fs_info_t *fsinfo;
+   Device dev;
+   ext2_inode_t *pinode;
+
+   dev = dest_node->fs_info->device;
+   fsinfo = dest_node->fs_info->down_layer_info;
+   finfo = dest_node->f_info.down_layer_info;
+   n_entries_per_block = fsinfo->s_block_size / sizeof(uint32_t);
+
    switch (volinfo->filesystem)
    {
       case FAT12:
