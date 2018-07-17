@@ -1565,26 +1565,19 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
    /* Init: total_remainder_size = size.
     * Condition: total_remainder_size>0
     */
+   current_cluster = finfo->current_cluster;
    for(   total_remainder_size = size, buf_pos = 0;
       total_remainder_size>0;)
    {
       file_cluster = finfo->f_pointer >> cluster_shift;
       cluster_offset = finfo->f_pointer & cluster_mask;
-      ret = fat_cluster_map(dest_node, file_cluster, &device_cluster);
-      ASSERT_MSG(0 == ret, "fat_buf_read_file(): fat_cluster_map() failed");
-      if(ret)
-      {
-         if(NULL != total_read_size_p)
-            *total_read_size_p = buf_pos;
-         return ret;
-      }
-      device_offset = (device_cluster << cluster_shift) + cluster_offset;
 
       cluster_remainder = cluster_size - cluster_offset;
       if(total_remainder_size > cluster_remainder)
          read_size = cluster_remainder;
       else
          read_size = total_remainder_size;
+      device_offset = fsinfo->data_offset + ((finfo->cluster - 2) << cluster_shift) + cluster_offset;
 
       ret = fat_device_buf_read(dev, (uint8_t *)(buf+buf_pos), device_offset, read_size);
       ASSERT_MSG(0 == ret, "ext2_buf_read_file(): ext2_device_buf_read() failed");
@@ -1595,8 +1588,27 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
          return -1;
       }
       buf_pos += read_size;
-      finfo->f_pointer += read_size;
       total_remainder_size -= read_size;
+      /* Get next cluster offset */
+      /* Only if we know that it will be required in the next loop*/
+      if(read_size == cluster_remainder)
+      {
+         ret = fat_get_next_cluster_entry(dest_node, current_cluster, &current_cluster);
+         ASSERT_MSG(0 == ret, "fat_buf_read_file(): fat_get_next_cluster_entry() failed");
+         if(ret)
+         {
+            if(NULL != total_read_size_p)
+               *total_read_size_p = buf_pos;
+            return ret;
+         }
+         if((FAT12 == fsinfo->fat_version && current_cluster >= 0XFF8)   ||
+            (FAT16 == fsinfo->fat_version && current_cluster >= 0XFFF8)  ||
+            (FAT32 == fsinfo->fat_version && current_cluster >= 0X0FFFFFF8))
+         {
+            ret = FAT_EOF;
+            break;
+         }
+      }
    }
 
    if(NULL != total_read_size_p)
@@ -1607,6 +1619,7 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
 
    return 0;
 }
+
 
 #if 0
 /* Map file block number to disk block number
@@ -1730,47 +1743,64 @@ uint32_t fat_cluster_map(vnode_t * dest_node, uint32_t file_cluster, uint32_t *d
    finfo = dest_node->f_info.down_layer_info;
 
    *device_cluster_p = FAT_BAD_CLUSTER; /* Return this value if error */
-   switch (fsinfo->fat_version)
+   
+
+   if(0 == file_cluster)
    {
-      case FAT12:
-         fat_entry_offset = file_cluster + (file_cluster / 2);
-         break;
-      case FAT16:
-         fat_entry_offset = file_cluster * 2;
-         break;
-      case FAT32:
-         fat_entry_offset = file_cluster * 4;
-         break;
-      default:
+      *device_cluster_p = finfo->first_cluster;
+      return 0;
+   }
+   else if(file_cluster == finfo->current_logical_cluster)
+   {
+      *device_cluster_p = finfo->current_cluster;
+   }
+   else if(file_cluster == finfo->current_logical_cluster+1)
+   {
+      switch (fsinfo->fat_version)
+      {
+         case FAT12:
+            fat_entry_offset = finfo->current_cluster + (finfo->current_cluster / 2);
+            break;
+         case FAT16:
+            fat_entry_offset = finfo->current_cluster * 2;
+            break;
+         case FAT32:
+            fat_entry_offset = finfo->current_cluster * 4;
+            break;
+         default:
+            return -1;
+      }
+
+      disk_entry_offset = fsinfo->fat_offset + fat_entry_offset;
+      if(ext2_device_buf_read(dev, (uint8_t *)&temp_cluster_num, disk_entry_offset, 4))
+      {
          return -1;
-   }
+      }
 
-   disk_entry_offset = fsinfo->fat_offset + fat_entry_offset;
-   if(ext2_device_buf_read(dev, (uint8_t *)&temp_cluster_num, disk_entry_offset, 4))
-   {
-      return -1;
-   }
-
-   if (fsinfo->fat_version == FAT12)
-   {
-      if (file_cluster & 1)
-         *device_cluster_p = (temp_cluster_num >> 4) & 0xfff; /* Read from bit 8 to 24, take only last 12 bits */
+      if (fsinfo->fat_version == FAT12)
+      {
+         if (file_cluster & 1)
+            *device_cluster_p = (temp_cluster_num >> 4) & 0xfff; /* Read from bit 8 to 24, take only last 12 bits */
+         else
+            *device_cluster_p = temp_cluster_num & 0xfff; /* Read from bit 0 to 16, take only first 12 bits */
+      }
+      else if (fsinfo->fat_version == FAT16)
+      {
+         *device_cluster_p = temp_cluster_num & 0xffff; /* Take only first 16 bits */
+      }
+      else if (fsinfo->fat_version == FAT32)
+      {
+         *device_cluster_p = temp_cluster_num & 0x0fffffff;
+      }
       else
-         *device_cluster_p = temp_cluster_num & 0xfff; /* Read from bit 0 to 16, take only first 12 bits */
-   }
-   else if (fsinfo->fat_version == FAT16)
-   {
-      *device_cluster_p = temp_cluster_num & 0xffff; /* Take only first 16 bits */
-   }
-   else if (fsinfo->fat_version == FAT32)
-   {
-      *device_cluster_p = temp_cluster_num & 0x0fffffff;
+      {
+         return -1;
+      }
    }
    else
    {
-      return -1;
+      /* TODO: Implement generic case, for lseek */
    }
-
    return 0;
 }
 
