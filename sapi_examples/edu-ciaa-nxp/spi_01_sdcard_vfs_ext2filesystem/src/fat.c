@@ -183,13 +183,13 @@ static int ext2_file_map_alloc(vnode_t *node, uint32_t file_block, uint32_t *dev
 
 /** \brief read file data to a buffer
  **
- ** \param[in] dest_node node from which to read data
+ ** \param[in] file file from which to read data
  ** \param[in] buf buffer to which copy data read
  ** \param[in] size size of the data to read, in bytes
  ** \param[out] total_read_size_p pointer to the variable indicating how many bytes were read
  ** \return -1 if an error occurs, in other case 0
  **/
-static int ext2_buf_read_file(vnode_t *dest_node, uint8_t *buf, uint32_t size, uint32_t *total_read_size_p);
+static int fat_buf_read_file(file_desc_t *file, uint8_t *buf, uint32_t size, uint32_t *total_read_size_p);
 
 /** \brief Read superblock data from formatted device
  **
@@ -796,23 +796,9 @@ static node_type_t ext2_nodetype_e2tovfs(int imode)
 
 static int ext2_file_open(file_desc_t *file)
 {
-   ext2_file_info_t *finfo;
-   //int ret;
+   fat_file_info_t *finfo;
+
    finfo = file->node->f_info.down_layer_info;
-   /*
-   finfo->pinode = (ext2_inode_t *) tlsf_malloc(fs_mem_handle, sizeof(ext2_inode_t));
-   ASSERT_MSG(NULL != finfo->pinode, "ext2_file_open(): ciaaLibs_poolBufLock() failed");
-   if(NULL == finfo->pinode)
-   {
-      return -1;
-   }
-   ret = ext2_get_inode(&(file->node->fs_info), finfo->f_inumber, finfo->pinode);
-   if(0 > ret)
-   {
-      return -1;
-   }
-   */
-   finfo->f_pointer = 0;
    /* reset seek pointer */
 
    return 0;
@@ -830,17 +816,16 @@ static int ext2_file_close(file_desc_t *file)
    return 0;
 }
 
-static size_t ext2_file_read(file_desc_t *file, void *buf, size_t size)
+static size_t fat_file_read(file_desc_t *file, void *buf, size_t size)
 {
-   ext2_file_info_t *finfo;
+   fat_file_info_t *finfo;
    uint32_t read_size;
    int ret;
 
    /*TODO: Validate file->cursor */
    finfo = file->node->f_info.down_layer_info;
-   finfo->f_pointer = file->cursor;
-   ret = ext2_buf_read_file(file->node, (uint8_t *)buf, size, &read_size);
-   ASSERT_MSG(0 == ret, "ext2_file_read(): ext2_buf_read_file() failed");
+   ret = fat_buf_read_file(file, (uint8_t *)buf, size, &read_size);
+   ASSERT_MSG(0 == ret, "fat_file_read(): fat_buf_read_file() failed");
    if(ret)
    {
       return 0;
@@ -1435,7 +1420,7 @@ static int ext2_umount_subtree_rec(vnode_t *root)
    return 0;
 }
 
-static size_t ext2_file_write(file_desc_t *desc, void *buf, size_t size)
+static size_t fat_file_write(file_desc_t *desc, void *buf, size_t size)
 {
    int ret;
 
@@ -1447,10 +1432,10 @@ static size_t ext2_file_write(file_desc_t *desc, void *buf, size_t size)
 
    node = desc->node;
    dev = node->fs_info->device;
-   finfo = (ext2_file_info_t *)node->f_info.down_layer_info;
-   fsinfo = (ext2_fs_info_t *)node->fs_info->down_layer_info;
+   finfo = (fat_file_info_t *)node->f_info.down_layer_info;
+   fsinfo = (fat_fs_info_t *)node->fs_info->down_layer_info;
 
-   uint32_t buf_pos, remaining_write_size, device_block;
+   uint32_t buf_pos, remaining_write_size, device_block, pointer;
    uint32_t write_size, write_offset;
 
    if(NULL == finfo || NULL == fsinfo)
@@ -1458,19 +1443,20 @@ static size_t ext2_file_write(file_desc_t *desc, void *buf, size_t size)
       return 0;
    }
 
-   finfo->f_pointer = desc->cursor;
+   pointer = desc->cursor;
+
    buf_pos = 0;
    remaining_write_size = size;
    while (remaining_write_size > 0) {
       /* Position inside current block */
-      write_offset = finfo->f_pointer % fsinfo->s_block_size;
+      write_offset = pointer % fsinfo->s_block_size;
       /* #bytes to write to current block */
       write_size = fsinfo->s_block_size - write_offset;
       /* remaining bytes to write less than block size */
       if (write_size > remaining_write_size)
          write_size = remaining_write_size;
       /* map file block to disk block */
-      ret = ext2_file_map_alloc(node, finfo->f_pointer >> (10+fsinfo->e2sb.s_log_block_size), &device_block);
+      ret = ext2_file_map_alloc(node, pointer >> (10+fsinfo->e2sb.s_log_block_size), &device_block);
       if(ret)
       {
          return 0;
@@ -1483,14 +1469,14 @@ static size_t ext2_file_write(file_desc_t *desc, void *buf, size_t size)
          return -1;
       }
       /* update iterators */
-      finfo->f_pointer += write_size;
+      pointer += write_size;
       buf_pos += write_size;
       remaining_write_size -= write_size;
    }
    /* all bytes written. Update pointers */
-   desc->cursor = finfo->f_pointer;
-   if(finfo->f_pointer > finfo->f_size)
-      finfo->f_size = finfo->f_pointer;
+   desc->cursor = pointer;
+   if(pointer > finfo->f_size)
+      finfo->f_size = pointer;
    /* finfo->pinode->i_blocks was refreshed everytime ext2_file_map_alloc() was called.
     * Write inode in its position in disk
     * flush memory info to disk
@@ -1520,37 +1506,38 @@ static size_t ext2_file_write(file_desc_t *desc, void *buf, size_t size)
 
 
 
-static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, uint32_t *total_read_size_p)
+static int fat_buf_read_file(file_desc_t *file, uint8_t *buf, uint32_t size, uint32_t *total_read_size_p)
 {
    /* FIXME: If size>finfo->f_size error or truncate? */
    int ret = -1;
    uint32_t file_cluster, cluster_offset;
    uint32_t device_cluster, device_offset;
    uint16_t cluster_size, cluster_shift, cluster_mask;
-   uint32_t total_remainder_size, cluster_remainder, read_size, buf_pos;
+   uint32_t total_remainder_size, cluster_remainder, read_size, buf_pos, cursor;
    fat_file_info_t *finfo;
    fat_fs_info_t *fsinfo;
    Device dev;
 
-   fsinfo = dest_node->fs_info->down_layer_info;
-   finfo = dest_node->f_info.down_layer_info;
-   dev = dest_node->fs_info->device;
+   fsinfo = (fat_fs_info_t *) file->node->fs_info->down_layer_info;
+   finfo = (fat_file_info_t *) file->node->f_info.down_layer_info;
+   dev = file->node->fs_info->device;
 
    cluster_size = fsinfo->cluster_size;
    cluster_shift = (uint16_t)fsinfo->log_cluster_size;
    cluster_mask = (uint32_t)cluster_size-1;
 
-   file_cluster = finfo->f_pointer >> cluster_shift;
-   cluster_offset = finfo->f_pointer & cluster_mask;
+   file_cluster = file->cursor >> cluster_shift;
+   cluster_offset = file->cursor & cluster_mask;
 
    if(NULL != total_read_size_p)
       *total_read_size_p = 0;
 
-   if(finfo->f_pointer > finfo->f_size)
-      finfo->f_pointer = finfo->f_size;
+   if(file->cursor > finfo->f_size)
+      file->cursor = finfo->f_size;
    /*Truncate read size*/
-   if(finfo->f_pointer + size > finfo->f_size)
-      size = finfo->f_size - finfo->f_pointer;
+   if(file->cursor + size > finfo->f_size)
+      size = finfo->f_size - file->cursor;
+   cursor = file->cursor;
 
    /* Must read total_remainder_size bytes from file.
     * Cant read all in a row. It must be read cluster by cluster.
@@ -1568,8 +1555,8 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
    current_cluster = finfo->current_cluster;
    for(   total_remainder_size = size, buf_pos = 0; total_remainder_size>0;)
    {
-      file_cluster = finfo->f_pointer >> cluster_shift;
-      cluster_offset = finfo->f_pointer & cluster_mask;
+      file_cluster = cursor >> cluster_shift;
+      cluster_offset = cursor & cluster_mask;
 
       cluster_remainder = cluster_size - cluster_offset;
       if(total_remainder_size > cluster_remainder)
@@ -1610,6 +1597,7 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
       if(ret)
         break;
       buf_pos += read_size;
+      cursor += read_size;
       total_remainder_size -= read_size;
 
    }
