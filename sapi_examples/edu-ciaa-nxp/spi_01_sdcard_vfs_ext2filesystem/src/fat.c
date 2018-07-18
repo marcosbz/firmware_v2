@@ -1523,7 +1523,7 @@ static size_t ext2_file_write(file_desc_t *desc, void *buf, size_t size)
 static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, uint32_t *total_read_size_p)
 {
    /* FIXME: If size>finfo->f_size error or truncate? */
-   int ret;
+   int ret = -1;
    uint32_t file_cluster, cluster_offset;
    uint32_t device_cluster, device_offset;
    uint16_t cluster_size, cluster_shift, cluster_mask;
@@ -1566,8 +1566,7 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
     * Condition: total_remainder_size>0
     */
    current_cluster = finfo->current_cluster;
-   for(   total_remainder_size = size, buf_pos = 0;
-      total_remainder_size>0;)
+   for(   total_remainder_size = size, buf_pos = 0; total_remainder_size>0;)
    {
       file_cluster = finfo->f_pointer >> cluster_shift;
       cluster_offset = finfo->f_pointer & cluster_mask;
@@ -1579,45 +1578,52 @@ static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, u
          read_size = total_remainder_size;
       device_offset = fsinfo->data_offset + ((finfo->cluster - 2) << cluster_shift) + cluster_offset;
 
-      ret = fat_device_buf_read(dev, (uint8_t *)(buf+buf_pos), device_offset, read_size);
-      ASSERT_MSG(0 == ret, "ext2_buf_read_file(): ext2_device_buf_read() failed");
-      if(ret)
+      if(0 == fat_device_buf_read(dev, (uint8_t *)(buf+buf_pos), device_offset, read_size))     
+      {
+         /* Get next cluster offset */
+         /* Only if we know that it will be required in the next loop*/
+         if(read_size == cluster_remainder)
+         {
+            if(0 == fat_get_next_cluster_entry(dest_node, current_cluster, &current_cluster))
+            {
+               if((FAT12 == fsinfo->fat_version && current_cluster >= 0XFF8)   ||
+                  (FAT16 == fsinfo->fat_version && current_cluster >= 0XFFF8)  ||
+                  (FAT32 == fsinfo->fat_version && current_cluster >= 0X0FFFFFF8))
+               {
+                  ret = FAT_EOF;
+               }            
+            }
+            else /* fat_get_next_cluster_entry() failed */
+            {
+               if(NULL != total_read_size_p)
+                  *total_read_size_p = buf_pos;
+               ret = -1;
+            }
+         }
+      }
+      else /* fat_device_buf_read() failed */
       {
          if(NULL != total_read_size_p)
             *total_read_size_p = buf_pos;
-         return -1;
+         ret = -1;
       }
+      if(ret)
+        break;
       buf_pos += read_size;
       total_remainder_size -= read_size;
-      /* Get next cluster offset */
-      /* Only if we know that it will be required in the next loop*/
-      if(read_size == cluster_remainder)
-      {
-         ret = fat_get_next_cluster_entry(dest_node, current_cluster, &current_cluster);
-         ASSERT_MSG(0 == ret, "fat_buf_read_file(): fat_get_next_cluster_entry() failed");
-         if(ret)
-         {
-            if(NULL != total_read_size_p)
-               *total_read_size_p = buf_pos;
-            return ret;
-         }
-         if((FAT12 == fsinfo->fat_version && current_cluster >= 0XFF8)   ||
-            (FAT16 == fsinfo->fat_version && current_cluster >= 0XFFF8)  ||
-            (FAT32 == fsinfo->fat_version && current_cluster >= 0X0FFFFFF8))
-         {
-            ret = FAT_EOF;
-            break;
-         }
-      }
+
    }
 
    if(NULL != total_read_size_p)
       *total_read_size_p = buf_pos;
-   ASSERT_MSG(buf_pos == size, "fat_buf_read_file(): buf_pos == size failed");
-   if(buf_pos != size)
-      return -1;
+   if(-1 != ret)
+   {
+      finfo->current_cluster = current_cluster;
+      if(NULL != total_read_size_p)
+         *total_read_size_p = buf_pos;
+   }
 
-   return 0;
+   return ret;
 }
 
 
