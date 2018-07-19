@@ -1449,9 +1449,9 @@ static size_t fat_file_write(file_desc_t *desc, void *buf, size_t size)
    remaining_write_size = size;
    while (remaining_write_size > 0) {
       /* Position inside current block */
-      write_offset = pointer % fsinfo->s_block_size;
+      write_offset = pointer % fsinfo->cluster_size;
       /* #bytes to write to current block */
-      write_size = fsinfo->s_block_size - write_offset;
+      write_size = fsinfo->cluster_size - write_offset;
       /* remaining bytes to write less than block size */
       if (write_size > remaining_write_size)
          write_size = remaining_write_size;
@@ -1614,114 +1614,113 @@ static int fat_buf_read_file(file_desc_t *file, uint8_t *buf, uint32_t size, uin
    return ret;
 }
 
-
-#if 0
-/* Map file block number to disk block number
- *
- */
-static int ext2_block_map(vnode_t * dest_node, uint32_t file_block, uint32_t *device_block_p)
+static int fat_buf_write_file(file_desc_t *file, uint8_t *buf, uint32_t size, uint32_t *total_write_size_p)
 {
-   uint32_t shift_block_level, shift_single_block_level;
-   uint32_t temp_block_num, n_entries_per_block, index_offset, aux, block_level;
-   int ret;
-   ext2_file_info_t *finfo;
-   ext2_fs_info_t *fsinfo;
+   /* FIXME: If size>finfo->f_size error or truncate? */
+   int ret = -1;
+   uint32_t file_cluster, cluster_offset;
+   uint32_t device_cluster, device_offset;
+   uint16_t cluster_size, cluster_shift, cluster_mask;
+   uint32_t total_remainder_size, cluster_remainder, write_size, buf_pos, cursor;
+   fat_file_info_t *finfo;
+   fat_fs_info_t *fsinfo;
    Device dev;
-   ext2_inode_t *pinode;
 
-   dev = dest_node->fs_info->device;
-   fsinfo = dest_node->fs_info->down_layer_info;
-   finfo = dest_node->f_info.down_layer_info;
-   n_entries_per_block = fsinfo->s_block_size / sizeof(uint32_t);
+   fsinfo = (fat_fs_info_t *) file->node->fs_info->down_layer_info;
+   finfo = (fat_file_info_t *) file->node->f_info.down_layer_info;
+   dev = file->node->fs_info->device;
 
-   ret = ext2_get_inode(dest_node->fs_info, finfo->f_inumber, &ext2_node_buffer);
-   if(0 > ret)
-   {
-      return -1;
-   }
-   pinode = &ext2_node_buffer;
+   cluster_size = fsinfo->cluster_size;
+   cluster_shift = (uint16_t)fsinfo->log_cluster_size;
+   cluster_mask = (uint32_t)cluster_size-1;
 
-   /* shift_single_level is the number of bits of the block indirection level mask */
-   for(shift_single_block_level = 0, aux = n_entries_per_block; aux; shift_single_block_level++)
-   {
-      aux = aux>>1;
-   }
+   file_cluster = file->cursor >> cluster_shift;
+   cluster_offset = file->cursor & cluster_mask;
 
-   if (file_block < N_DIRECT_BLOCKS)
-   {
-      /* Direct block */
-      *device_block_p = pinode->i_block[file_block];
-      return 0;
-   }
+   if(NULL != total_write_size_p)
+      *total_write_size_p = 0;
 
-   file_block -= N_DIRECT_BLOCKS;
+   if(file->cursor > finfo->f_size)
+      file->cursor = finfo->f_size;
+   /*Truncate write size*/
+   if(file->cursor + size > finfo->f_size)
+      size = finfo->f_size - file->cursor;
+   cursor = file->cursor;
 
-   for (   shift_block_level = 0, block_level = 1;
-      file_block >= (int32_t)1<<(shift_single_block_level+shift_block_level);
-      file_block -= (int32_t)1<<(shift_single_block_level+shift_block_level),
-      shift_block_level += shift_single_block_level, block_level++)
-   {
-
-   /* In every iteration a new block indirection level is reached.
-    * In every loop, file_block is checked against the current block range
-    * according to the current indirection (see table below).
-    * The block range of the previous indirection level is subtracted from file_block
-    * When the loop finishes, the maped block number is the offset inside the last indirection level reached,
-    * and block_level leaves with the current indirection level
-    */
-   /* Indirection level and corresponding block ranges
-    * 1024B/4B = 256 blocks
-    * 1 2 4 8 16 32 64 128 256 512 1024
-    * 0 1 2 3 4  5  6  7   8   9   10
-    * N_INDIR_BLOCKS_PER_BLOCK: BLOCK_SIZE / sizeof(uint32_t)
-    * N_INDIR_BLOCKS_PER_BLOCK**2
-    * N_INDIR_BLOCKS_PER_BLOCK**3
+   /* Must write total_remainder_size bytes to file.
+    * Cant write all in a row. It must be written cluster by cluster.
+    * First the disk cluster must be retrieved, which matches the actual file pointer.
+    * Start writing this cluster in position (offset%cluster_size).
+    * Must write at most to the end of this cluster.
+    * Copy chunk of write data to buffer.
+    * Subtract written bytes from total_remainder_size. Add writen bytes to fpointer.
+    * Check loop condition and repeat iteration if valid
     */
 
-      if(file_block < (int32_t) 1 << shift_block_level)
-      {
-         /* The block number is within current indirection level block range */
-         break;
-      }
-      if (block_level > N_INDIRECT_BLOCKS)
-      {
-         /* Only 3 indirection levels are implemented in ext2. block_level is out of range */
-         *device_block_p = 0;
-         return -1;
-      }
-   }
-
-   /* In which of the three N_INDIRECT_BLOCKS ranges is the file block number?
-    * If block_level=1, top indirect block number is i_blocks[12], indirection level 1
-    * If block_level=2, top indirect block number is i_blocks[13], indirection level 2
-    * If block_level=3, top indirect block number is i_blocks[14], indirection level 3
+   /* Init: total_remainder_size = size.
+    * Condition: total_remainder_size>0
     */
-   temp_block_num = pinode->i_block[N_DIRECT_BLOCKS + block_level - 1];
-
-   for (;block_level;block_level--)
+   current_cluster = finfo->current_cluster;
+   for(   total_remainder_size = size, buf_pos = 0; total_remainder_size>0;)
    {
-      if (temp_block_num == 0)
-      {
-         *device_block_p = 0; /* Block does not exist */
-         return -1;
-      }
-      index_offset =    (temp_block_num << (10+fsinfo->e2sb.s_log_block_size)) + (
-                        ((file_block & (((1<<shift_single_block_level)-1))<<(shift_block_level))
-                        >> shift_block_level) * sizeof(uint32_t) );
+      file_cluster = cursor >> cluster_shift;
+      cluster_offset = cursor & cluster_mask;
 
-      ret = ext2_device_buf_read(dev, (uint8_t *)temp_block_num, index_offset, sizeof(uint32_t));
+      cluster_remainder = cluster_size - cluster_offset;
+      if(total_remainder_size > cluster_remainder)
+         write_size = cluster_remainder;
+      else
+         write_size = total_remainder_size;
+      device_offset = fsinfo->data_offset + ((finfo->cluster - 2) << cluster_shift) + cluster_offset;
+
+      if(0 == fat_device_buf_write(dev, (uint8_t *)(buf+buf_pos), device_offset, write_size))     
+      {
+         /* Get next cluster offset */
+         /* Only if we know that it will be required in the next loop*/
+         if(write_size == cluster_remainder)
+         {
+            if(0 == fat_get_next_cluster_entry(dest_node, current_cluster, &current_cluster))
+            {
+               if((FAT12 == fsinfo->fat_version && current_cluster >= 0XFF8)   ||
+                  (FAT16 == fsinfo->fat_version && current_cluster >= 0XFFF8)  ||
+                  (FAT32 == fsinfo->fat_version && current_cluster >= 0X0FFFFFF8))
+               {
+                  ret = FAT_EOF;
+               }            
+            }
+            else /* fat_get_next_cluster_entry() failed */
+            {
+               if(NULL != total_write_size_p)
+                  *total_write_size_p = buf_pos;
+               ret = -1;
+            }
+         }
+      }
+      else /* fat_device_buf_write() failed */
+      {
+         if(NULL != total_write_size_p)
+            *total_write_size_p = buf_pos;
+         ret = -1;
+      }
       if(ret)
-      {
-         return -1;
-      }
-      shift_block_level -= shift_single_block_level;
+        break;
+      buf_pos += write_size;
+      cursor += write_size;
+      total_remainder_size -= write_size;
+
    }
 
+   if(NULL != total_write_size_p)
+      *total_write_size_p = buf_pos;
+   if(-1 != ret)
+   {
+      finfo->current_cluster = current_cluster;
+      if(NULL != total_write_size_p)
+         *total_write_size_p = buf_pos;
+   }
 
-   *device_block_p = temp_block_num;
-   return 0;
+   return ret;
 }
-#endif
 
 uint32_t fat_cluster_map(vnode_t * dest_node, uint32_t file_cluster, uint32_t *device_cluster_p)
 {
