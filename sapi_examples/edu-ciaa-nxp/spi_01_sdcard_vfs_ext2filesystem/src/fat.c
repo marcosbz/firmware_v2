@@ -1532,11 +1532,11 @@ static int fat_buf_read_file(file_desc_t *file, uint8_t *buf, uint32_t size, uin
    if(NULL != total_read_size_p)
       *total_read_size_p = 0;
 
-   if(file->cursor > finfo->f_size)
-      file->cursor = finfo->f_size;
+   if(file->cursor >= finfo->f_size)
+      file->cursor = finfo->f_size - 1;
    /*Truncate read size*/
-   if(file->cursor + size > finfo->f_size)
-      size = finfo->f_size - file->cursor;
+   if(file->cursor + size >= finfo->f_size)
+      size = finfo->f_size - file->cursor - 1;
    cursor = file->cursor;
 
    /* Must read total_remainder_size bytes from file.
@@ -1679,12 +1679,13 @@ static int fat_buf_write_file(file_desc_t *file, uint8_t *buf, uint32_t size, ui
          /* Only if we know that it will be required in the next loop*/
          if(write_size == cluster_remainder)
          {
-            if(0 == fat_get_next_cluster_entry(dest_node, current_cluster, &current_cluster))
+            if(0 == fat_get_next_cluster_entry(dest_node, current_cluster, &next_cluster))
             {
-               if((FAT12 == fsinfo->fat_version && current_cluster >= 0XFF8)   ||
-                  (FAT16 == fsinfo->fat_version && current_cluster >= 0XFFF8)  ||
-                  (FAT32 == fsinfo->fat_version && current_cluster >= 0X0FFFFFF8))
+               if((FAT12 == fsinfo->fat_version && next_cluster >= 0XFF8)   ||
+                  (FAT16 == fsinfo->fat_version && next_cluster >= 0XFFF8)  ||
+                  (FAT32 == fsinfo->fat_version && next_cluster >= 0X0FFFFFF8))
                {
+                  /* Next cluster is EOF. Need to allocate another cluster */
                   ret = FAT_EOF;
                }            
             }
