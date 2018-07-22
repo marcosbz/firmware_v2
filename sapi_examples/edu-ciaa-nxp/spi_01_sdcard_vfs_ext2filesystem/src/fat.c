@@ -1658,14 +1658,45 @@ static int fat_buf_write_file(file_desc_t *file, uint8_t *buf, uint32_t size, ui
     */
 
    /* Init: total_remainder_size = size.
-    * Condition: total_remainder_size>0
+    * Condition: total_remainder_size>0. finfo->previous_cluster should be a valid cluster
     */
    current_cluster = finfo->current_cluster;
-   for(   total_remainder_size = size, buf_pos = 0; total_remainder_size>0;)
+   previous_cluster = finfo->previous_cluster;
+   for(total_remainder_size = size, buf_pos = 0; total_remainder_size>0;)
    {
       file_cluster = cursor >> cluster_shift;
       cluster_offset = cursor & cluster_mask;
+      /* Check if a new cluster need to be allocated */
+      if((FAT12 == fsinfo->fat_version && current_cluster >= 0XFF8)   ||
+         (FAT16 == fsinfo->fat_version && current_cluster >= 0XFFF8)  ||
+         (FAT32 == fsinfo->fat_version && current_cluster >= 0X0FFFFFF8))
+      {
+         /* Current cluster is EOF. Need to allocate another cluster. */
+         /* Search for free cluster and replace pointer in previous entry */
+         uint32_t tempclus;
+         tempclus = fat_get_free_cluster(fsinfo);
+         if(tempclus != DFS_BAD_CLUS)
+         {
+            fat_set_fat_(fsi, p_scratch, &byteswritten, lastcluster, tempclus);
+            fi->cluster = tempclus;
+         }
+         else /* Could not find free cluster */
+         {
+         
+         }
+         /* Link new cluster onto file */
 
+         /* Mark newly allocated cluster as end of chain */
+         switch(fi->volinfo->filesystem)
+         {
+            case FAT12:		tempclus = 0xfff;	break;
+            case FAT16:		tempclus = 0xffff;	break;
+            case FAT32:		tempclus = 0x0fffffff;	break;
+            default:		return DFS_ERRMISC;
+         }
+         fat_set_fat_(fsi, p_scratch, &byteswritten, fi->cluster, tempclus);
+         ret = FAT_EOF;
+      }  
       cluster_remainder = cluster_size - cluster_offset;
       if(total_remainder_size > cluster_remainder)
          write_size = cluster_remainder;
