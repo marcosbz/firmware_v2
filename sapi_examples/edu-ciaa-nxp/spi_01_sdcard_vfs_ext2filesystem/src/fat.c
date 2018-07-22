@@ -1662,8 +1662,9 @@ static int fat_buf_write_file(file_desc_t *file, uint8_t *buf, uint32_t size, ui
     */
    current_cluster = finfo->current_cluster;
    previous_cluster = finfo->previous_cluster;
-   for(total_remainder_size = size, buf_pos = 0; total_remainder_size>0;)
+   for(ret = 0, total_remainder_size = size, buf_pos = 0; total_remainder_size>0;)
    {
+      ret = -1;
       file_cluster = cursor >> cluster_shift;
       cluster_offset = cursor & cluster_mask;
       /* Check if a new cluster need to be allocated */
@@ -1675,80 +1676,99 @@ static int fat_buf_write_file(file_desc_t *file, uint8_t *buf, uint32_t size, ui
          /* Search for free cluster and replace pointer in previous entry */
          uint32_t tempclus;
          tempclus = fat_get_free_cluster(fsinfo);
-         if(tempclus != DFS_BAD_CLUS)
+         if(tempclus != FAT_EOF)
          {
-            fat_set_fat_(fsi, p_scratch, &byteswritten, lastcluster, tempclus);
-            fi->cluster = tempclus;
+            if(0 == fat_set_fat_entry(fsinfo, previous_cluster, tempclus))
+            {
+               uint32_t temp_eof = 0;
+               /* Mark newly allocated cluster as end of chain */
+               switch(fsinfo->fat_version)
+               {
+                  case FAT12: temp_eof = 0xfff; break;
+                  case FAT16: temp_eof = 0xffff; break;
+                  case FAT32: temp_eof = 0x0fffffff; break;
+                  default: break;
+               }
+               if(temp_eof)
+               {
+                  if(fat_set_fat_entry(fsinfo, tempclus, temp_eof))
+                  {
+                     current_cluster = tempclus;
+                  }
+                  else /* Could not set last entry as EOF */
+                  {
+                     current_cluster = FAT_EOF;
+                  }
+               }
+               else
+               {
+                  current_cluster = FAT_EOF;
+               }
+            }
+            else /* Could not allocate new cluster */
+            {
+               current_cluster = FAT_EOF;
+            }
          }
          else /* Could not find free cluster */
          {
-         
+            current_cluster = FAT_EOF;
          }
-         /* Link new cluster onto file */
+         /* If we got here with valid current_cluster, we got a new allocated cluster */
+      }
+      if(FAT_EOF == current_cluster || 2 >= current_cluster)
+         break;
 
-         /* Mark newly allocated cluster as end of chain */
-         switch(fi->volinfo->filesystem)
-         {
-            case FAT12:		tempclus = 0xfff;	break;
-            case FAT16:		tempclus = 0xffff;	break;
-            case FAT32:		tempclus = 0x0fffffff;	break;
-            default:		return DFS_ERRMISC;
-         }
-         fat_set_fat_(fsi, p_scratch, &byteswritten, fi->cluster, tempclus);
-         ret = FAT_EOF;
-      }  
       cluster_remainder = cluster_size - cluster_offset;
       if(total_remainder_size > cluster_remainder)
          write_size = cluster_remainder;
       else
          write_size = total_remainder_size;
-      device_offset = fsinfo->data_offset + ((finfo->cluster - 2) << cluster_shift) + cluster_offset;
+      device_offset = fsinfo->data_offset + ((current_cluster - 2) << cluster_shift) + cluster_offset;
 
-      if(0 == fat_device_buf_write(dev, (uint8_t *)(buf+buf_pos), device_offset, write_size))     
+      if(0 == fat_device_buf_write(dev, (uint8_t *)(buf+buf_pos), device_offset, write_size))
       {
          /* Get next cluster offset */
          /* Only if we know that it will be required in the next loop*/
          if(write_size == cluster_remainder)
          {
-            if(0 == fat_get_next_cluster_entry(dest_node, current_cluster, &next_cluster))
+            uint32_t tempclus;
+            if(0 == fat_get_next_cluster_entry(dest_node, current_cluster, &tempclus))
             {
-               if((FAT12 == fsinfo->fat_version && next_cluster >= 0XFF8)   ||
-                  (FAT16 == fsinfo->fat_version && next_cluster >= 0XFFF8)  ||
-                  (FAT32 == fsinfo->fat_version && next_cluster >= 0X0FFFFFF8))
-               {
-                  /* Next cluster is EOF. Need to allocate another cluster */
-                  ret = FAT_EOF;
-               }            
+               previous_cluster = current_cluster;
+               current_cluster = tempclus;
+               buf_pos += write_size;
+               cursor += write_size;
+               total_remainder_size -= write_size;
+               ret = 0;
             }
             else /* fat_get_next_cluster_entry() failed */
             {
-               if(NULL != total_write_size_p)
-                  *total_write_size_p = buf_pos;
-               ret = -1;
             }
+         }
+         else
+         {
+            buf_pos += write_size;
+            cursor += write_size;
+            total_remainder_size -= write_size;
+            ret = 0;
          }
       }
       else /* fat_device_buf_write() failed */
       {
-         if(NULL != total_write_size_p)
-            *total_write_size_p = buf_pos;
-         ret = -1;
-      }
-      if(ret)
-        break;
-      buf_pos += write_size;
-      cursor += write_size;
-      total_remainder_size -= write_size;
 
+      }
+      if(0 > ret)
+         break;
    }
 
    if(NULL != total_write_size_p)
       *total_write_size_p = buf_pos;
-   if(-1 != ret)
+   if(0 <= ret)
    {
       finfo->current_cluster = current_cluster;
-      if(NULL != total_write_size_p)
-         *total_write_size_p = buf_pos;
+      finfo->previous_cluster = previous_cluster;
+      file->cursor = cursor;
    }
 
    return ret;
