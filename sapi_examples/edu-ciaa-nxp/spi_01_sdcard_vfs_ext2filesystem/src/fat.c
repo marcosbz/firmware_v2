@@ -1668,9 +1668,7 @@ static int fat_buf_write_file(file_desc_t *file, uint8_t *buf, uint32_t size, ui
       file_cluster = cursor >> cluster_shift;
       cluster_offset = cursor & cluster_mask;
       /* Check if a new cluster need to be allocated */
-      if((FAT12 == fsinfo->fat_version && current_cluster >= 0XFF8)   ||
-         (FAT16 == fsinfo->fat_version && current_cluster >= 0XFFF8)  ||
-         (FAT32 == fsinfo->fat_version && current_cluster >= 0X0FFFFFF8))
+      if(FAT_EOF == current_cluster)
       {
          /* Current cluster is EOF. Need to allocate another cluster. */
          /* Search for free cluster and replace pointer in previous entry */
@@ -1680,27 +1678,12 @@ static int fat_buf_write_file(file_desc_t *file, uint8_t *buf, uint32_t size, ui
          {
             if(0 == fat_set_fat_entry(file->node, previous_cluster, tempclus))
             {
-               uint32_t temp_eof = 0;
-               /* Mark newly allocated cluster as end of chain */
-               switch(fsinfo->fat_version)
+   
+               if(fat_set_fat_entry(file->node, tempclus, FAT_EOF))
                {
-                  case FAT12: temp_eof = 0xfff; break;
-                  case FAT16: temp_eof = 0xffff; break;
-                  case FAT32: temp_eof = 0x0fffffff; break;
-                  default: break;
+                  current_cluster = tempclus;
                }
-               if(temp_eof)
-               {
-                  if(fat_set_fat_entry(file->node, tempclus, temp_eof))
-                  {
-                     current_cluster = tempclus;
-                  }
-                  else /* Could not set last entry as EOF */
-                  {
-                     current_cluster = FAT_EOF;
-                  }
-               }
-               else
+               else /* Could not set last entry as EOF */
                {
                   current_cluster = FAT_EOF;
                }
@@ -1716,7 +1699,7 @@ static int fat_buf_write_file(file_desc_t *file, uint8_t *buf, uint32_t size, ui
          }
          /* If we got here with valid current_cluster, we got a new allocated cluster */
       }
-      if(FAT_EOF == current_cluster || 2 >= current_cluster)
+      if(FAT_EOF == current_cluster || 2 > current_cluster)
          break;
 
       cluster_remainder = cluster_size - cluster_offset;
@@ -1774,89 +1757,10 @@ static int fat_buf_write_file(file_desc_t *file, uint8_t *buf, uint32_t size, ui
    return ret;
 }
 
-uint32_t fat_cluster_map(vnode_t * dest_node, uint32_t file_cluster, uint32_t *device_cluster_p)
+static int fat_get_next_cluster_entry(vnode_t *node, uint32_t current_cluster, uint32_t *next_cluster)
 {
-   uint32_t fat_entry_offset, result, temp_cluster_num;
-
-   int ret;
-   ext2_file_info_t *finfo;
-   ext2_fs_info_t *fsinfo;
-   Device dev;
-
-   dev = dest_node->fs_info->device;
-   fsinfo = dest_node->fs_info->down_layer_info;
-   finfo = dest_node->f_info.down_layer_info;
-
-   *device_cluster_p = FAT_BAD_CLUSTER; /* Return this value if error */
-   
-
-   if(0 == file_cluster)
-   {
-      *device_cluster_p = finfo->first_cluster;
-      return 0;
-   }
-   else if(file_cluster == finfo->current_logical_cluster)
-   {
-      *device_cluster_p = finfo->current_cluster;
-   }
-   else if(file_cluster == finfo->current_logical_cluster+1)
-   {
-      switch (fsinfo->fat_version)
-      {
-         case FAT12:
-            fat_entry_offset = finfo->current_cluster + (finfo->current_cluster / 2);
-            break;
-         case FAT16:
-            fat_entry_offset = finfo->current_cluster * 2;
-            break;
-         case FAT32:
-            fat_entry_offset = finfo->current_cluster * 4;
-            break;
-         default:
-            return -1;
-      }
-
-      disk_entry_offset = fsinfo->fat_offset + fat_entry_offset;
-      if(ext2_device_buf_read(dev, (uint8_t *)&temp_cluster_num, disk_entry_offset, 4))
-      {
-         return -1;
-      }
-
-      if (fsinfo->fat_version == FAT12)
-      {
-         if (file_cluster & 1)
-            *device_cluster_p = (temp_cluster_num >> 4) & 0xfff; /* Read from bit 8 to 24, take only last 12 bits */
-         else
-            *device_cluster_p = temp_cluster_num & 0xfff; /* Read from bit 0 to 16, take only first 12 bits */
-      }
-      else if (fsinfo->fat_version == FAT16)
-      {
-         *device_cluster_p = temp_cluster_num & 0xffff; /* Take only first 16 bits */
-      }
-      else if (fsinfo->fat_version == FAT32)
-      {
-         *device_cluster_p = temp_cluster_num & 0x0fffffff;
-      }
-      else
-      {
-         return -1;
-      }
-   }
-   else
-   {
-      /* TODO: Implement generic case, for lseek */
-   }
-   return 0;
-}
-
-static uint32_t fat_get_free_cluster(vnode_t *node)
-{
-   /* Search a group with free inode. Retrieve the free inode number */
-   /* TODO: Slow allocation algorithm. Should optimize */
-   ext2_gd_t gd;
-   int ret;
-   uint32_t i,j,n, block_offset;
-   uint16_t group_index, segment_index, segment_offset;
+   int ret = -1;
+   uint32_t entry_offset, temp_cluster;
 
    Device dev;
    fat_file_info_t *finfo;
@@ -1866,107 +1770,94 @@ static uint32_t fat_get_free_cluster(vnode_t *node)
    finfo = (ext2_file_info_t *)node->f_info.down_layer_info;
    fsinfo = (ext2_fs_info_t *)node->fs_info->down_layer_info;
 
-   /* Search a group with a free inode */
-   for(group_index = 0; group_index < fsinfo->s_groups_count; group_index++)
+   *next_cluster = FAT_EOF;
+   switch (fsinfo->fat_version)
    {
-      ret = ext2_get_groupdesc(node->fs_info, group_index, &gd);
-      if(ret)
+      case FAT12:
+         entry_offset = current_cluster + (current_cluster / 2);
+         break;
+      case FAT16:
+         entry_offset = current_cluster * 2;
+         break;
+      case FAT32:
+         entry_offset = current_cluster * 4;
+         break;
+      default:
+         return -1;   /* System error */
+   }
+   if(0 == fat_device_buf_read(dev, (uint8_t *)&temp_cluster,
+                          fsinfo->fat1_offset + entry_offset,
+                          4))
+   {
+      switch (fsinfo->fat_version)
       {
-         return -1;
+         case FAT12:
+            if(current_cluster & 1) /* Read from byte 8 to 24, need from 12 to 24 */
+               temp_cluster >> 4;   /* So shift 4 bits to LSB */
+            temp_cluster &= 0xFFF; /* 12 bits */
+            break;
+         case FAT16:
+            temp_cluster &= 0xFFFF; /* 16 bits */
+            break;
+         case FAT32:
+            temp_cluster &= 0x0FFFFFFF; /* 28 bits */
+            break;
+         default:
+            return -1;   /* System error */
       }
+      *next_cluster = temp_cluster;
+      ret = 0;
+   }
+   else /* Device read failed */
+   {
 
-      if(gd.free_inodes_count)
+   }
+   return ret;
+}
+
+uint32_t fat_get_free_cluster(vnode_t *node)
+{
+   uint32_t ret = FAT_EOF;
+   uint32_t i, temp_entry;
+
+   fat_file_info_t *finfo;
+   fat_fs_info_t *fsinfo;
+
+   finfo = (ext2_file_info_t *)node->f_info.down_layer_info;
+   fsinfo = (ext2_fs_info_t *)node->fs_info->down_layer_info;
+
+   for (i = 2; i < fsinfo->numclusters; i++)
+   {
+      if(0 == fat_get_next_cluster_entry(node, i, &temp_entry))
+      {
+         if(0 == *temp_entry) /* Free entry marked as 0 */
+         {
+            break;
+         }
+      }
+      else
       {
          break;
       }
    }
-   //printf("ext2_alloc_inode_bit(): group_index: %d s_groups_count: %d\n", group_index, fsinfo->s_groups_count);
-   ASSERT_MSG(group_index<fsinfo->s_groups_count, "ext2_alloc_inode_bit(): No group with free inodes");
-   if(group_index >= fsinfo->s_groups_count)
-   {
-      /* All gd indicate that the group is full. No inode available */
-      return -1;
-   }
-   block_offset = (gd.inode_bitmap)<<(10+fsinfo->e2sb.s_log_block_size);
-   for(segment_index=0, segment_offset = 0; segment_index < fsinfo->s_buff_per_block;
-         segment_index++, segment_offset += fsinfo->s_buff_size)
-   {
-      /* Read node bitmap to bitmap_buffer */
-      ret = ext2_device_buf_read(dev, (uint8_t *)ext2_block_buffer,
-                                 block_offset + segment_offset,
-                                 fsinfo->s_buff_size);
-      if(ret)
-      {
-         return -1;
-      }
-      /* Search for a free byte in bitmap, which means, bit whose value is 0 */
-      /* First search a byte whose value is not FF, which means, it contains a 0 bit */
-      for(i = 0; i<fsinfo->s_buff_size && 0XFFU == ext2_block_buffer[i]; i++);
-      ASSERT_MSG(i<fsinfo->s_buff_size, "ext2_alloc_inode_bit(): No free byte. Descriptor error");
-      if(i >= fsinfo->s_buff_size)
-      {
-         /* No free bit found in this block segment. Continue with next segment */
-         continue;
-      }
-      /* Found byte with free bit in bitmap. The block segment that contains this byte is stored
-       * in ext2_block_buffer. The byte position in the segment is i. The segment offset is segment_offset
-       */
-      break;
-   }
-   ASSERT_MSG(segment_index < fsinfo->s_buff_per_block, "ext2_alloc_inode_bit(): No free bit in bitmap");
-   if(segment_index >= fsinfo->s_buff_per_block)
-   {
-      /* No free bit found in bitmap
-       * Metadata inconsistency error. Group descriptor shows that there is a free bit available
-       */
-      return -1;
-   }
-   ret = ext2_device_buf_write(dev, (uint8_t *)ext2_block_buffer,
-                              block_offset + segment_offset,
-                              fsinfo->s_buff_size);
-   /* Found byte with free bit in block located in block_offset, offset (segment_offset + i) */
-   /* Find free bit inside the found byte */
-   for(j = 0; j < 8; j++)
-   {
-      if(!(ext2_block_buffer[i] & (1<<j)))
-      {
-         ext2_block_buffer[i] |= (1<<j);
-         n = 8*i + j;   /* Bit offset inside segment */
-         break;
-      }
-   }
-   ASSERT_MSG(j < 8, "ext2_alloc_inode_bit(): No free bit in selected byte. Inconsistency error");
-   if(j >= 8)
-   {
-      return -1;   /* Should never happen */
-   }
-   /* segment_offset*8 + n is the free block number relative to the current group.
-    * Must calculate absolute inode number
-    */
-   *new_inumber_p = group_index * fsinfo->e2sb.s_inodes_per_group + (segment_offset<<3) + n + 1;
-   /* Write modified bitmap to disk */
-   ret = ext2_device_buf_write(dev, (uint8_t *)ext2_block_buffer,
-                              block_offset + segment_offset,
-                              fsinfo->s_buff_size);
-   ASSERT_MSG(ret >= 0, "ext2_alloc_inode_bit(): ext2_device_buf_write() failed");
-   if(ret)
-   {
-      return -1;
-   }
-   /* Refresh in-memory bookkeeping info. The caller should write it to disk */
-   fsinfo->e2sb.s_free_inodes_count--;
-   gd.free_inodes_count--;
-   ret = ext2_set_groupdesc(node->fs_info, group_index, &gd);
-   //while(1);
-   ASSERT_MSG(ret >= 0, "ext2_alloc_inode_bit(): ext2_set_groupdesc() failed");
-   if(ret)
-   {
-      return -1;
-   }
-   //fsinfo->e2fs_gd[group_index].used_dirs_count++; /* Caller knows if this is a dir or not. Leave unmodified */
-   finfo->f_inumber = *new_inumber_p;
-
-   return 0;
+   if(0 == *temp_entry)
+      ret = i;
+   return ret;
+}
+uint32_t fat_get_free_fat_(vnode_t *node, uint8_t *p_scratch) {
+	uint32_t i, result = 0xffffffff, p_scratchcache = 0;
+	/*
+	 * Search starts at cluster 2, which is the first usable cluster
+	 * NOTE: This search can't terminate at a bad cluster, because there might
+	 * legitimately be bad clusters on the disk.
+	 */
+	for (i = 2; i < fsi->vi.numclusters; i++) {
+		result = fat_get_fat_(fsi, p_scratch, &p_scratchcache, i);
+		if (!result) {
+			return i;
+		}
+	}
+	return 0x0ffffff7;
 }
 
 static int ext2_mount_load(vnode_t *dir_node)
