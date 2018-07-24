@@ -517,7 +517,7 @@ fsdriver_operations_t ext2_driver_operations =
  *
  */
 uint8_t ext2_block_buffer[EXT2_BLOCK_BUFFER_SIZE];
-ext2_direntry_t ext2_dir_entry_buffer;
+fat_direntry_t fat_dir_entry_buffer;
 ext2_inode_t ext2_node_buffer;
 
 /*==================[external data definition]===============================*/
@@ -1749,9 +1749,41 @@ static int fat_buf_write_file(file_desc_t *file, uint8_t *buf, uint32_t size, ui
       *total_write_size_p = buf_pos;
    if(0 <= ret)
    {
-      finfo->current_cluster = current_cluster;
-      finfo->previous_cluster = previous_cluster;
-      file->cursor = cursor;
+      ret = -1;
+      if(file->cursor + size > finfo->f_size) /* Wrote past file limit */
+      {
+         /* Update file entry with new file size */
+         /* Refresh inode in disk */
+         pinode = &ext2_node_buffer;
+         ret = ext2_get_inode(node->fs_info, finfo->f_inumber, pinode);
+         if( fat_device_buf_write(dev, (uint8_t *)&fat_entry_buffer,
+             finfo->entry_offset, sizeof(fat_direntry_t)) )
+         {
+            uint32_t temp_newsize = file->cursor + size;
+            fat_entry_buffer.filesize_0 = (uint8_t) ((temp_newsize >> 0) & 0xFF);
+            fat_entry_buffer.filesize_1 = (uint8_t) ((temp_newsize >> 8) & 0xFF);
+            fat_entry_buffer.filesize_2 = (uint8_t) ((temp_newsize >> 16) & 0xFF);
+            fat_entry_buffer.filesize_3 = (uint8_t) ((temp_newsize >> 24) & 0xFF);
+            if( fat_device_buf_write(dev, (uint8_t *)&fat_entry_buffer,
+                finfo->entry_offset, sizeof(fat_direntry_t)) )
+            {
+               /* TODO: which other entry in disk should be modified? */
+               finfo->f_size = file->cursor + size;
+               finfo->current_cluster = current_cluster;
+               finfo->previous_cluster = previous_cluster;
+               file->cursor = cursor;
+               ret = 0;
+            }
+            else /* File entry write back failed */
+            {
+
+            }
+         }
+         else /* File entry read failed */
+         {
+
+         }
+      }
    }
 
    return ret;
@@ -1826,10 +1858,12 @@ uint32_t fat_get_free_cluster(vnode_t *node)
    finfo = (ext2_file_info_t *)node->f_info.down_layer_info;
    fsinfo = (ext2_fs_info_t *)node->fs_info->down_layer_info;
 
+   /* Start from first valid cluster, cluster 2 */
    for (i = 2; i < fsinfo->numclusters; i++)
    {
       if(0 == fat_get_next_cluster_entry(node, i, &temp_entry))
       {
+
          if(0 == *temp_entry) /* Free entry marked as 0 */
          {
             break;
@@ -1844,20 +1878,52 @@ uint32_t fat_get_free_cluster(vnode_t *node)
       ret = i;
    return ret;
 }
-uint32_t fat_get_free_fat_(vnode_t *node, uint8_t *p_scratch) {
-	uint32_t i, result = 0xffffffff, p_scratchcache = 0;
-	/*
-	 * Search starts at cluster 2, which is the first usable cluster
-	 * NOTE: This search can't terminate at a bad cluster, because there might
-	 * legitimately be bad clusters on the disk.
-	 */
-	for (i = 2; i < fsi->vi.numclusters; i++) {
-		result = fat_get_fat_(fsi, p_scratch, &p_scratchcache, i);
-		if (!result) {
-			return i;
-		}
-	}
-	return 0x0ffffff7;
+
+static size_t fat_file_seek(file_desc_t *file, size_t pos);
+{
+   /* FIXME: If size>finfo->f_size error or truncate? */
+   int ret = -1;
+   uint32_t temp_cluster, pos_cluster;
+   fat_file_info_t *finfo;
+   fat_fs_info_t *fsinfo;
+   Device dev;
+
+   fsinfo = (fat_fs_info_t *) file->node->fs_info->down_layer_info;
+   finfo = (fat_file_info_t *) file->node->f_info.down_layer_info;
+   dev = file->node->fs_info->device;
+
+   temp_cluster = finfo->firstcluster;
+   pos_cluster = pos >> fsinfo->log_cluster_size;
+   while(pos_cluster)
+   {
+      if(0 == fat_get_next_cluster_entry(file->node, temp_cluster, &temp_cluster))
+      {
+         if((temp_cluster < 2) ||
+            (FAT12 == fsinfo->fat_version && temp_cluster >= 0XFF0)   ||
+            (FAT16 == fsinfo->fat_version && temp_cluster >= 0XFFF0)  ||
+            (FAT32 == fsinfo->fat_version && temp_cluster >= 0X0FFFFFF0))
+         {
+            /* Should not find EOF or dealloc or bad cluster, seek limited to fsize */
+            /* Get out of loop and dont update cursor */
+            break;
+         }
+         else
+         {
+            /* Keep advance through file */
+         }
+      }
+      else /* Failed to get next cluster */
+      {
+         break;
+      }
+      pos_cluster--;
+   }
+   if(0 == pos_cluster) /* OK only if could advance to the position */
+   {
+      finfo->current_cluster = temp_cluster;
+      ret = 0;
+   }
+   return ret;
 }
 
 static int ext2_mount_load(vnode_t *dir_node)

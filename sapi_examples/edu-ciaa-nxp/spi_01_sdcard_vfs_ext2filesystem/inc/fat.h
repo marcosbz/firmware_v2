@@ -202,6 +202,31 @@ typedef struct ext2_direntry
    char    name[EXT2_MAXNAMELEN];   /* Name with length<=EXT2_MAXNAMELEN */
 } ext2_direntry_t;
 
+typedef struct fat_direntry {
+	uint8_t name[11];		/* filename */
+	uint8_t attr;			/* attributes (see ATTR_* constant definitions) */
+	uint8_t reserved;		/* reserved, must be 0 */
+	uint8_t crttimetenth;	/* create time, 10ths of a second (0-199 are valid) */
+	uint8_t crttime_l;		/* creation time low byte */
+	uint8_t crttime_h;		/* creation time high byte */
+	uint8_t crtdate_l;		/* creation date low byte */
+	uint8_t crtdate_h;		/* creation date high byte */
+	uint8_t lstaccdate_l;	/* last access date low byte */
+	uint8_t lstaccdate_h;	/* last access date high byte */
+	uint8_t startclus_h_l;	/* high word of first cluster, low byte (FAT32) */
+	uint8_t startclus_h_h;	/* high word of first cluster, high byte (FAT32) */
+	uint8_t wrttime_l;		/* last write time low byte */
+	uint8_t wrttime_h;		/* last write time high byte */
+	uint8_t wrtdate_l;		/* last write date low byte */
+	uint8_t wrtdate_h;		/* last write date high byte */
+	uint8_t startclus_l_l;	/* low word of first cluster, low byte */
+	uint8_t startclus_l_h;	/* low word of first cluster, high byte */
+	uint8_t filesize_0;		/* file size, low byte */
+	uint8_t filesize_1;		/* */
+	uint8_t filesize_2;		/* */
+	uint8_t filesize_3;		/* file size, high byte */
+} fat_direntry_t;
+
 /** \brief ext2 node structure
  **
  ** ext2 node structure
@@ -295,34 +320,30 @@ typedef struct fat_fs_info
 //   uint32_t            f_size;
 //} ext2_file_info_t;
 
-//struct fat_file_info {
-//	struct fat_fs_info *fsi;
-//	struct volinfo *volinfo;		/* vol_info_t used to open this file */
-//	uint32_t dirsector;			/* physical sector containing dir entry of this file */
-//	uint8_t diroffset;			/* # of this entry within the dir sector */
-//	int mode;				    /* mode in which this file was opened */
-//	uint32_t firstcluster;		/* first cluster of file */
-//	uint32_t filelen;			/* byte length of file */
-//
-//	uint32_t cluster;			/* current cluster */
-//	uint32_t pointer;			/* current (BYTE) pointer */
-//};
-
 typedef struct fat_file_info
 {
-  struct fat_file_s *ff_next;      /* Retained in a singly linked list */
-  uint8_t  ff_bflags;              /* The file buffer flags */
-  uint8_t  ff_oflags;              /* Flags provided when file was opened */
-  uint8_t  ff_sectorsincluster;    /* Sectors remaining in cluster */
-  uint16_t ff_dirindex;            /* Index into ff_dirsector to directory entry */
-  uint32_t ff_currentcluster;      /* Current cluster being accessed */
-  off_t    ff_dirsector;           /* Sector containing the directory entry */
-  off_t    ff_size;                /* Size of the file in bytes */
-  off_t    ff_startcluster;        /* Start cluster of file on media */
-  off_t    ff_currentsector;       /* Current sector being operated on */
-  off_t    ff_cachesector;         /* Current sector in the file buffer */
-  uint8_t *ff_buffer;              /* File buffer (for partial sector accesses) */
+   uint32_t diroffset;         /* byte offset of dir entry in disk */
+   uint32_t firstcluster;     /* first cluster of file */
+   uint32_t cluster;          /* current cluster */
+   uint16_t cluster_size;
+   uint8_t log_cluster_size;
+   uint32_t f_size;           /* Byte size of file */
 } fat_file_info_t;
+
+//typedef struct fat_file_info
+//{
+//  uint8_t  ff_bflags;              /* The file buffer flags */
+//  uint8_t  ff_oflags;              /* Flags provided when file was opened */
+//  uint8_t  ff_sectorsincluster;    /* Sectors remaining in cluster */
+//  uint16_t ff_dirindex;            /* Index into ff_dirsector to directory entry */
+//  uint32_t ff_currentcluster;      /* Current cluster being accessed */
+//  off_t    ff_dirsector;           /* Sector containing the directory entry */
+//  off_t    ff_size;                /* Size of the file in bytes */
+//  off_t    ff_startcluster;        /* Start cluster of file on media */
+//  off_t    ff_currentsector;       /* Current sector being operated on */
+//  off_t    ff_cachesector;         /* Current sector in the file buffer */
+//  uint8_t *ff_buffer;              /* File buffer (for partial sector accesses) */
+//} fat_file_info_t;
 
 
 //typedef struct ext2_format_param
