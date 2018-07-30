@@ -1199,7 +1199,7 @@ static int fat_format(filesystem_info_t *fs, void *param)
    ext2_format_param_t format_parameters;
 
    fat_bootsector_t boot_sector;
-   ext2_inode_t node;
+   fat_direntry_t dirent;
 
    uint8_t sec_per_cluster;
 
@@ -1362,7 +1362,7 @@ static int fat_format(filesystem_info_t *fs, void *param)
       .bpb = {
          .bytepersec_l = (uint8_t)(sectorsize & 0xFF),
          .bytepersec_h = (uint8_t)((sectorsize >> 8) & 0xFF),
-         .secperclus = 0x04, /* 2KB clusters */
+         .secperclus = sec_per_cluster, /* 2KB clusters */
          .reserved_l = 0x01,    /* 1 reserved sector. */
          .reserved_h = 0x0,
          .numfats = 0x02,    /* 2 FAT copies */
@@ -1443,7 +1443,7 @@ static int fat_format(filesystem_info_t *fs, void *param)
          return -1;
    }
 
-   if(0 > fat_device_buf_write(dev, (uint8_t *)boot_sector,0,
+   if(0 > fat_device_buf_write(dev, (uint8_t *)&boot_sector,0,
                                 sizeof(fat_bootsector_t)))
    {
       return -1;
@@ -1482,6 +1482,8 @@ static int fat_format(filesystem_info_t *fs, void *param)
    {
       rootdir_offset = ((uint16_t)boot_sector.bpb.secperfat_l |
                         (((uint16_t)boot_sector.bpb.secperfat_h) << 8))*boot_sector.bpb.numfats;
+      rootdir_offset *= sectorsize;
+      rootdir_offset += fat1_offset;
       dataarea_offset = rootdir_offset + 512 * 32; /* skip root entries 32 bytes each */
                                                    /* TODO: roundup to sector size */
       dataarea_offset += sectorsize - (dataarea_offset % sectorsize);
@@ -1490,42 +1492,34 @@ static int fat_format(filesystem_info_t *fs, void *param)
    {
       dataarea_offset = ((uint16_t)boot_sector.bpb.secperfat_l |
                         (((uint16_t)boot_sector.bpb.secperfat_h) << 8))*boot_sector.bpb.numfats;
+      dataarea_offset *= sectorsize;
+      dataarea_offset += fat1_offset
       rootdir_offset = (uint32_t) boot_sector.ebpb.ebpb32.root_0 |
                        (((uint32_t) boot_sector.ebpb.ebpb32.root_1) << 8) |
                        (((uint32_t) boot_sector.ebpb.ebpb32.root_2) << 16) |
                        (((uint32_t) boot_sector.ebpb.ebpb32.root_3) << 24);
       rootdir_offset *= sectorsize;
    }
-   
-   volinfo->reservedsecs + (volinfo->secperfat * 2);
-   cluster = fsi.vi.rootdir / fsi.vi.secperclus;
 
-   de = (struct dirent) {
+   /* Get rootdir cluster offset */
+   cluster = rootdir_offset / (sec_per_cluster * blockInfo.size);
+
+   dirent = (fat_direntry_t) {
       .name = "ROOT DIR   ",
-      .attr = ATTR_DIRECTORY,
+      .attr = FAT_ATTR_DIRECTORY,
       .startclus_l_l = cluster & 0xff,
-      .startclus_l_h = (cluster & 0xff00) >> 8,
-      .startclus_h_l = (cluster & 0xff0000) >> 16,
-      .startclus_h_h = (cluster & 0xff000000) >> 24,
+      .startclus_l_h = (cluster >> 8) & 0xff,
+      .startclus_h_l = (cluster >> 16) & 0xff,
+      .startclus_h_h = (cluster >> 24)& 0xff,
    };
 
-   fat_set_filetime(&de);
+   /* TODO: set timestamp */
+   //fat_set_timestamp(&dirent);
 
-   /*
-    * write the directory entry
-    * note that we no longer have the sector containing the directory
-    * entry, tragically, so we have to re-read it
-    */
-
-   /* we clear other FAT TABLE */
-   memset(fat_sector_buff, 0, sizeof(fat_sector_buff));
-   memcpy(&(((struct dirent*) fat_sector_buff)[0]), &de, sizeof(struct dirent));
-
-   if (0 > block_dev_write(   bdev,
-               (char *) fat_sector_buff,
-               fsi.vi.bytepersec,
-               fsi.vi.rootdir * fsi.vi.bytepersec / dev_blk_size)) {
-      return DFS_ERRMISC;
+   if(0 > fat_device_buf_write(dev, (uint8_t *)&dirent,rootdir_offset,
+                                sizeof(fat_direntry_t)))
+   {
+      return -1;
    }
 
    root_dir_sz = (fsi.vi.rootentries * sizeof(struct dirent) + 
@@ -1541,17 +1535,33 @@ static int fat_format(filesystem_info_t *fs, void *param)
             (root_dir_sz + fsi.vi.rootdir) * fsi.vi.bytepersec / dev_blk_size);
       root_dir_sz--;
    }
+   /* Round content size to sector size */
+   temp = 512*sizeof(fat_direntry_t) + sectorsize - ((512*sizeof(fat_direntry_t)) % sectorsize);
+   if(0 > fat_device_buf_write(dev, (uint8_t *)&dirent,rootdir_offset+sizeof(fat_direntry_t),
+                               temp-sizeof(fat_direntry_t)))
+   {
+      return -1;
+   }
 
 
    /* Mark newly allocated cluster as end of chain */
-   switch (fsi.vi.filesystem) {
-      case FAT12:      cluster = 0xfff;   break;
-      case FAT16:      cluster = 0xffff;   break;
-      case FAT32:      cluster = 0x0fffffff;   break;
-      default:      return DFS_ERRMISC;
+   switch (format_parameters.fat_version) {
+      case FAT_FORMAT_12:      cluster = 0xFFF;   break;
+      case FAT_FORMAT_16:      cluster = 0xFFFF;   break;
+      case FAT_FORMAT_32:      cluster = 0x0FFFFFFF;   break;
+      default:      return -1;
    }
    psize = 0;
    fat_set_fat_(&fsi, fat_sector_buff, &psize, cluster, cluster);
+   if(0 > fat_set_fat_entry(file->node, 2, FAT_EOF)) /* Set first cluster (fat entry 2) as EOF */
+   {
+     return -1;
+   }
+   if(0 > fat_device_buf_write(dev, (uint8_t *)&dirent,fat1_offset+sizeof(fat_direntry_t),
+                               temp-sizeof(fat_direntry_t)))
+   {
+      return -1;
+   }
 
 
    return 0;
