@@ -107,70 +107,136 @@
 
 /*==================[typedef]================================================*/
 
-/** \brief ext2 superblock
+/** \brief DOS 3.31 BIOS Parameter Block structure (FAT12/16) 25 bytes
  **
- ** Superblock of the ext2 file system
- **
- ** TODO: Skip suffix padding to economize memory
+ ** 
  **/
-typedef struct ext2sb
-{                                      /* offset : description */
-   uint32_t   s_inodes_count;          /* 0: Inodes count */
-   uint32_t   s_blocks_count;          /* 4: Blocks count */
-   uint32_t   s_r_blocks_count;        /* 8: Reserved blocks count */
-   uint32_t   s_free_blocks_count;     /* 12: Free blocks count */
-   uint32_t   s_free_inodes_count;     /* 16: Free inodes count */
-   uint32_t   s_first_data_block;      /* 20: First Data Block */
-   uint32_t   s_log_block_size;        /* 24: Block size */
-   uint32_t   s_log_frag_size;         /* 28: Fragment size */
-   uint32_t   s_blocks_per_group;      /* 32: # Blocks per group */
-   uint32_t   s_frags_per_group;       /* 36: # Fragments per group */
-   uint32_t   s_inodes_per_group;      /* 40: # Inodes per group */
-   uint32_t   s_mtime;                 /* 44: Mount time */
-   uint32_t   s_wtime;                 /* 48: Write time */
-   uint16_t   s_mnt_count;             /* 52: Mount count */
-   uint16_t   s_max_mnt_count;         /* 54: Maximal mount count */
-   uint16_t   s_magic;                 /* 56: Number that identifies the system as ext2. Fixed as 0xEF53 */
-   uint16_t   s_state;                 /* 58: File system state. Set to EXT2_ERROR_FS when mounted.
-                                        * Set to EXT2_VALID_FS when correctly unmounted.
-                                        */
-   uint16_t   s_errors;                /* 60: What should the fs do when error detected
-                                        * EXT2_ERRORS_CONTINUE: No special action
-                                        * EXT2_ERRORS_RO: Remount read-only
-                                        * EXT2_ERRORS_PANIC: Kernel panic
-                                        */
-   uint16_t   s_minor_rev_level;       /* 62: minor revision level */
-   uint32_t   s_lastcheck;             /* 64: Unix time of the last file system check */
-   uint32_t   s_checkinterval;         /* 68: Maximum Unix interval allowed between checks */
-   uint32_t   s_creator_os;            /* 72: Identifier of the OS that created the fs
-                                        * EXT2_OS_LINUX
-                                        * EXT2_OS_HURD
-                                        * EXT2_OS_MASIX
-                                        * EXT2_OS_FREEBSD
-                                        * EXT2_OS_LITES
-                                        */
-   uint32_t   s_rev_level;             /* 76: Revision level
-                                        * EXT2_GOOD_OLD_REV: Old basic version
-                                        * EXT2_DYNAMIC_REV: variable node size, extended attributes, etc.
-                                        */
-   uint16_t   s_def_resuid;            /* 80: Default user id for reserved blocks */
-   uint16_t   s_def_resgid;            /* 82: Default group id for reserved blocks */
-   uint32_t   s_first_ino;             /* 84: First non-reserved inode */
-   uint16_t   s_inode_size;            /* 88: size of inode structure. 128 in revision 0. */
-   uint16_t   s_block_group_nr;        /* 90: Number of block group containing this superblock */
-   uint32_t   s_feature_compat;        /* 92: compatible features set */
-   uint32_t   s_feature_incompat;      /* 96: incompatible feature set */
-   uint32_t   s_feature_ro_compat;     /* 100: readonly-compatible feature set */
-   uint8_t    s_uuid[16];              /* 104: 128-bit uuid for volume */
-   char       s_volume_name[16];       /* 120: volume name string */
-   //uint8_t    s_last_mounted[64];      /* 136: path of directory where last mounted */
-   //uint32_t   s_algo_bitmap;           /* 200: For data compression. Unused feature in this implementation */
-   //uint8_t    s_prealloc_blocks;       /* 204: # of blocks to preallocate when creating regular file */
-   //uint8_t    s_prealloc_dir_blocks;   /* 205: # of blocks to preallocate when creating directory */
-   //uint8_t    s_alignment[2];          /* 206: 4 byte alignment */
-   //uint8_t    padding[816];            /* 208: Not used fields from here on. Padding */
-} ext2_superblock_t;
+struct bpb {
+	uint8_t bytepersec_l;	/* logical bytes per sector LSB (0x00) */
+	uint8_t bytepersec_h;	/* logical bytes per sector MSB (0x02) */
+	uint8_t	secperclus;		/* logical sectors per cluster (1,2,4,8,16,32,64,128 are valid) */
+	uint8_t reserved_l;		/* logical reserved sectors LSB */
+	uint8_t reserved_h;		/* logical reserved sectors MSB */
+	uint8_t numfats;		/* number of FATs */
+	uint8_t rootentries_l;	/* root dir entries LSB */
+	uint8_t rootentries_h;	/* root dir entries MSB */
+	uint8_t sectors_s_l;	/* total logical sectors LSB */
+	uint8_t sectors_s_h;	/* total logical sectors MSB */
+	uint8_t mediatype;	/* media descriptor */
+	uint8_t secperfat_l;	/* logical sectors per FAT LSB */
+	uint8_t secperfat_h;	/* logical sectors per FAT MSB */
+	uint8_t secpertrk_l;	/* physical sectors per track LSB */
+	uint8_t secpertrk_h;	/* physical sectors per track MSB */
+	uint8_t heads_l;		/* number of heads LSB */
+	uint8_t heads_h;		/* number of heads MSB */
+	uint8_t hidden_0;		/* hidden sectors low byte */
+	uint8_t hidden_1;		/* (note - this is the number of MEDIA sectors before */
+	uint8_t hidden_2;		/* first sector of VOLUME - we rely on the MBR instead) */
+	uint8_t hidden_3;		/* hidden sectors high byte */
+	uint8_t sectors_l_0;	/* large total sectors low byte */
+	uint8_t sectors_l_1;	/* */
+	uint8_t sectors_l_2;	/* */
+	uint8_t sectors_l_3;	/* large total sectors high byte */
+};
 
+/** \brief format of DOS 3.34 and OS/2 1.0-1.1 extended BPB (FAT12/16/16B) 32 bytes
+ **
+ ** 
+ **/
+struct ebpb {
+	uint8_t unit;			/* int 13h drive# */
+	uint8_t head;			/* archaic, used by Windows NT-class OSes for flags */
+	uint8_t signature;		/* 0x28 or 0x29 */
+	uint8_t serial_0;		/* serial# */
+	uint8_t serial_1;		/* serial# */
+	uint8_t serial_2;		/* serial# */
+	uint8_t serial_3;		/* serial# */
+	uint8_t label[11];		/* volume label */
+	uint8_t system[8];		/* filesystem ID */
+};
+
+/** \brief format of full DOS 7.1 extended BIOS parameter block for FAT32 79 bytes
+ **
+ ** 
+ **/
+struct ebpb32 {
+	uint8_t fatsize_0;		/* logical sectors per FAT LSB */
+	uint8_t fatsize_1;		/* */
+	uint8_t fatsize_2;		/* */
+	uint8_t fatsize_3;		/* logical sectors per FAT MSB */
+	uint8_t extflags_l;		/* extended flags LSB */
+	uint8_t extflags_h;		/* extended flags MSB */
+	uint8_t fsver_l;		/* filesystem version LSB */
+	uint8_t fsver_h;		/* filesystem version MSB */
+	uint8_t root_0;			/* Root directory cluster, LSB */
+	uint8_t root_1;			/* */
+	uint8_t root_2;			/* */
+	uint8_t root_3;			/* Root directory cluster, LSB */
+	uint8_t fsinfo_l;		/* sector pointer to FSINFO within reserved area, low byte (2) */
+	uint8_t fsinfo_h;		/* sector pointer to FSINFO within reserved area, high byte (0) */
+	uint8_t bkboot_l;		/* sector pointer to backup boot sector within reserved area, low byte (6) */
+	uint8_t bkboot_h;		/* sector pointer to backup boot sector within reserved area, high byte (0) */
+	uint8_t reserved[12];	/* reserved, should be 0 */
+	uint8_t unit;			/* int 13h drive# */
+	uint8_t head;			/* archaic, used by Windows NT-class OSes for flags */
+	uint8_t signature;		/* 0x28 or 0x29 */
+	uint8_t serial_0;		/* serial# */
+	uint8_t serial_1;		/* serial# */
+	uint8_t serial_2;		/* serial# */
+	uint8_t serial_3;		/* serial# */
+	uint8_t label[11];		/* volume label */
+	uint8_t system[8];		/* filesystem ID */
+};
+
+/** \brief logical boot record
+ **
+ ** 
+ **/
+typedef struct lbr {
+	uint8_t jump[3];		/* JMP instruction */
+	uint8_t oemid[8];		/* OEM ID, space-padded */
+	struct bpb bpb;				/* BIOS Parameter Block */
+	union {
+		struct ebpb ebpb;		/* FAT12/16 Extended BIOS Parameter Block */
+		struct ebpb32 ebpb32;	/* FAT32 Extended BIOS Parameter Block */
+	} ebpb;
+	uint8_t code[420];		/* boot sector code */
+	uint8_t sig_55;			/* 0x55 signature byte */
+	uint8_t sig_aa;			/* 0xaa signature byte */
+} fat_bootsector_t;
+
+/** \brief Partition table entry
+ **
+ ** 
+ **/
+struct pt_info {
+	uint8_t	active; /* Bootable flag (partition "active"). 0x80 if partition active */
+	uint8_t	start_h;		/* Starting CHS head */
+	uint8_t	start_cs_l;		/* Starting CHS sector/cylinder (LSB) */
+	uint8_t	start_cs_h;		/* Starting CHS sector/cylinder (MSB) */
+	uint8_t	type;			/* Partition type */
+	uint8_t	end_h;			/* Ending CHS head */
+	uint8_t	end_cs_l;		/* Ending CHS sector/cylinder (LSB) */
+	uint8_t	end_cs_h;		/* Ending CHS sector/cylinder (MSB) */
+	uint8_t	start_0;		/* starting sector offset (LSB) */
+	uint8_t	start_1;		/* */
+	uint8_t	start_2;		/* */
+	uint8_t	start_3;		/* starting sector offset (MSB) */
+	uint8_t	size_0;			/* Length of partition in sectors (LSB) */
+	uint8_t	size_1;			/* */
+	uint8_t	size_2;			/* */
+	uint8_t	size_3;			/* Length of partition in sectors (MSB) */
+};
+
+/*
+ *	Master Boot Record structure
+ */
+typedef struct mbr {
+	uint8_t bootcode[0x1be];	/* boot sector */
+	struct pt_info ptable[4];		/* four partition table structures */
+	uint8_t sig_55;				/* 0x55 signature byte */
+	uint8_t sig_aa;				/* 0xaa signature byte */
+} fat_masterbootrecord_t;
 /** \brief ext2 group descriptor
  **
  ** ext2 file system block group descriptor

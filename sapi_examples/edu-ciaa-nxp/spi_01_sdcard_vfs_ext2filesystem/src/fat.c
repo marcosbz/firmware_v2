@@ -96,8 +96,28 @@ FIXME:
 /*==================[macros and definitions]=================================*/
 
 #define ASSERT_MSG(cond, msg) assert_msg((cond), (msg), __FILE__, __LINE__)
+#define FAT_LABEL    "CIAA_FA    " /* Whitespace-padded 11 byte string */
+#define FAT_SYSTEM12 "FAT12   "
+#define FAT_SYSTEM16 "FAT16   "
+#define FAT_SYSTEM32 "FAT32   "
 
 /*==================[internal data declaration]==============================*/
+
+static const uint8_t bootcode[130] =
+    { 0x0e, 0x1f, 0xbe, 0x5b, 0x7c, 0xac, 0x22, 0xc0, 0x74, 0x0b,
+      0x56, 0xb4, 0x0e, 0xbb, 0x07, 0x00, 0xcd, 0x10, 0x5e, 0xeb,
+      0xf0, 0x32, 0xe4, 0xcd, 0x16, 0xcd, 0x19, 0xeb, 0xfe, 0x54,
+      0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 0x6e, 0x6f, 0x74,
+      0x20, 0x61, 0x20, 0x62, 0x6f, 0x6f, 0x74, 0x61, 0x62, 0x6c,
+      0x65, 0x20, 0x64, 0x69, 0x73, 0x6b, 0x2e, 0x20, 0x20, 0x50,
+      0x6c, 0x65, 0x61, 0x73, 0x65, 0x20, 0x69, 0x6e, 0x73, 0x65,
+      0x72, 0x74, 0x20, 0x61, 0x20, 0x62, 0x6f, 0x6f, 0x74, 0x61,
+      0x62, 0x6c, 0x65, 0x20, 0x66, 0x6c, 0x6f, 0x70, 0x70, 0x79,
+      0x20, 0x61, 0x6e, 0x64, 0x0d, 0x0a, 0x70, 0x72, 0x65, 0x73,
+      0x73, 0x20, 0x61, 0x6e, 0x79, 0x20, 0x6b, 0x65, 0x79, 0x20,
+      0x74, 0x6f, 0x20, 0x74, 0x72, 0x79, 0x20, 0x61, 0x67, 0x61,
+      0x69, 0x6e, 0x20, 0x2e, 0x2e, 0x2e, 0x20, 0x0d, 0x0a, 0x00 };
+
 /*==================[internal functions declaration]=========================*/
 
 /** \brief Adds an entry in the directory with given parameters
@@ -563,75 +583,6 @@ int ext2_get_superblock(Device dev, ext2_superblock_t * sb_p)
 
    return 0;
 }
-
-#if 0
-static void print_superblock(ext2_superblock_t * superblock)
-{
-   //printf("s_inodes_count: %d\n", superblock->s_inodes_count);
-   //printf("s_blocks_count: %d\n", superblock->s_blocks_count);
-   //printf("s_r_blocks_count: %d\n", superblock->s_r_blocks_count);
-   //printf("s_free_blocks_count: %d\n", superblock->s_free_blocks_count);
-   //printf("s_free_inodes_count: %d\n", superblock->s_free_inodes_count);
-   //printf("s_first_data_block: %d\n", superblock->s_first_data_block);
-   //printf("s_log_block_size: %d\n", superblock->s_log_block_size);
-   //printf("s_log_frag_size: %d\n", superblock->s_log_frag_size);
-   //printf("s_blocks_per_group: %d\n", superblock->s_blocks_per_group);
-   //printf("s_frags_per_group: %d\n", superblock->s_frags_per_group);
-   //printf("s_inodes_per_group: %d\n", superblock->s_inodes_per_group);
-   //printf("s_mtime: %d\n", superblock->s_mtime);
-   //printf("s_wtime: %d\n", superblock->s_wtime);
-   //printf("s_mnt_count: %d\n", superblock->s_mnt_count);
-   //printf("s_max_mnt_count: %d\n", superblock->s_max_mnt_count);
-   //printf("s_magic: %#06x\n", superblock->s_magic);
-   //printf("s_state: %d\n", superblock->s_state);
-   //printf("s_errors: %d\n", superblock->s_errors);
-   //printf("s_minor_rev_level: %d\n", superblock->s_minor_rev_level);
-   //printf("s_lastcheck: %d\n", superblock->s_lastcheck);
-   //printf("s_checkinterval: %d\n", superblock->s_checkinterval);
-   //printf("s_creator_os: %d\n", superblock->s_creator_os);
-   //printf("s_rev_level: %d\n", superblock->s_rev_level);
-   //printf("s_def_resuid: %d\n", superblock->s_def_resuid);
-   //printf("s_def_resgid: %d\n", superblock->s_def_resgid);
-   //printf("s_first_ino: %d\n", superblock->s_first_ino);
-   //printf("s_inode_size: %d\n", superblock-> s_inode_size);
-   //printf("s_block_group_nr: %d\n", superblock->s_block_group_nr);
-   //printf("s_feature_compat: %d\n", superblock->s_feature_compat);
-   //printf("s_feature_incompat: %d\n", superblock->s_feature_incompat);
-   //printf("s_feature_ro_compat: %d\n", superblock->s_feature_ro_compat);
-}
-
-static void print_groupdescriptor(ext2_gd_t *gd)
-{
-
-   //printf("\n**Group Descriptor**\n");
-   //printf("block_bitmap: %d\n",gd->block_bitmap);     /* Blocks bitmap block */
-   //printf("inode_bitmap: %d\n",gd->inode_bitmap);     /* Inodes bitmap block */
-   //printf("inode_table: %d\n",gd->inode_table);      /* Inodes table block */
-   //printf("free_blocks_count: %d\n",gd->free_blocks_count);   /* Free blocks count */
-   //printf("free_inodes_count: %d\n",gd->free_inodes_count);   /* Free inodes count */
-   //printf("used_dirs_count: %d\n",gd->used_dirs_count);     /* Directories count */
-
-}
-
-static void print_inode(ext2_inode_t * inode)
-{
-   int i;
-   //printf("i_mode: %d\n", inode->i_mode);
-   //printf("i_uid: %d\n", inode->i_uid);
-   //printf("i_size: %d\n", inode->i_size);
-   //printf("i_atime: %d\n", inode->i_atime);
-   //printf("i_ctime: %d\n", inode->i_ctime);
-   //printf("i_mtime: %d\n", inode->i_mtime);
-   //printf("i_dtime: %d\n", inode->i_dtime);
-   //printf("i_gid: %d\n", inode->i_gid);
-   //printf("i_links_count: %d\n", inode->i_links_count);
-   //printf("i_blocks: %d\n", inode->i_blocks);
-   //printf("i_flags: %d\n", inode->i_flags);
-   //for(i=0; i<N_DIRECT_BLOCKS + N_INDIRECT_BLOCKS; i++)
-      //printf("Block %d: %04x\n",i, (inode->i_block)[i]);     /* blocks */
-   //printf("i_gen: %d\n",inode->i_gen);/* 100: generation number */
-}
-#endif
 
 static int ext2_read_inode(vnode_t *dest_node, uint32_t inumber)
 {
@@ -1235,6 +1186,373 @@ static int ext2_format(filesystem_info_t *fs, void *param)
    {
       return -1;
    }
+
+   return 0;
+}
+
+static int fat_format(filesystem_info_t *fs, void *param)
+{
+   int ret;
+   Device dev;
+   BlockDevice bdev;
+   blockDevInfo_t blockInfo;
+   ext2_format_param_t format_parameters;
+
+   fat_bootsector_t boot_sector;
+   ext2_inode_t node;
+
+   uint8_t sec_per_cluster;
+
+   dev = fs->device;
+   bdev = ooc_get_interface((Object)dev, BlockDevice);
+   ASSERT_MSG(bdev != NULL, "ext2_format(): dev parameter not a block device");
+   if(bdev == NULL)
+   {
+      return -1;
+   }
+   ret = bdev->ioctl((Object) dev, IOCTL_BLOCK_GETINFO, &blockInfo);
+   ASSERT_MSG(ret >= 0, "ext2_format(): ioctl() failed");
+   if(ret < 0)
+   {
+      return -1;
+   }
+   /* If no user parameters, set them to default */
+   if(param == NULL)
+   {
+      /*
+      The default number of sectors per cluster for floppies
+      (with FAT12) is
+
+      Drive size Secs/cluster   Cluster size
+           360 KB       2             1 KiB
+           720 KB       2             1 KiB
+           1.2 MB       1           512 bytes
+          1.44 MB       1           512 bytes
+          2.88 MB       2             1 KiB
+      The default number of sectors per cluster for fixed disks is
+      (with FAT12 below 16 MB, FAT16 above):
+      Drive size Secs/cluster   Cluster size
+         <  16 MB       8             4 KiB
+         < 128 MB       4             2 KiB
+         < 256 MB       8             4 KiB
+         < 512 MB      16             8 KiB
+         <   1 GB      32            16 KiB
+         <   2 GB      64            32 KiB
+         <   4 GB     128            64 KiB   (Windows NT only)
+         <   8 GB     256           128 KiB   (Windows NT 4.0 only)
+         <  16 GB     512           256 KiB   (Windows NT 4.0 only)
+      Usually people have file systems with average file size a few KB.
+      With a cluster size of 64 KiB or more the amount of slack (wasted space)
+      can easily become more than half the total space.
+      FAT32 allows larger file systems with a small cluster size:
+        Drive size Secs/cluster   Cluster size
+         < 260 MB       1           512 bytes
+         <   8 GB       8             4 KiB
+         <  16 GB      16             8 KiB
+         <  32 GB      32            16 KiB
+         <   2 TB      64            32 KiB
+      */
+
+      /* Default format setup: format whole device */
+      if((0xFFFFFFFF / blockInfo.size) >  blockInfo.num) /* Avoid overflow */
+         format_parameters.partition_size = blockInfo.num * blockInfo.size;
+      else
+         format_parameters.partition_size = 0xFFFFFFFF;
+
+      if(format_parameters.partition_size <= (2880*1024))
+      {
+         format_parameters.fat_version = FAT_FORMAT_12;
+      }
+      else
+      {
+         format_parameters.fat_version = FAT_FORMAT_16;
+      }
+   /* \param == NULL */
+   }
+
+   if(FAT_FORMAT_12 == format_parameters.fat_version)
+   {
+      if(format_parameters.partition_size <= (360*1024))
+      {
+         sec_per_cluster = 2;
+      }
+      else if(format_parameters.partition_size <= (720*1024))
+      {
+         sec_per_cluster = 2;
+      }
+      else if(format_parameters.partition_size <= (1200*1024))
+      {
+         sec_per_cluster = 1;
+      }
+      else if(format_parameters.partition_size <= (1440*1024))
+      {
+         sec_per_cluster = 1;
+      }
+      else if(format_parameters.partition_size <= (2880*1024))
+      {
+         sec_per_cluster = 2;
+      }
+      else
+      { 
+         return -1;
+         /* TODO: Cant support partition larger than 4GB */
+      }
+   }
+   else if(FAT_FORMAT_16 == format_parameters.fat_version)
+   {
+      if(format_parameters.partition_size < (16*1024*1024))
+      {
+         sec_per_cluster = 2;
+      }
+      else if(format_parameters.partition_size < (128*1024*1024))
+      {
+         sec_per_cluster = 4;
+      }
+      else if(format_parameters.partition_size < (256*1024*1024))
+      {
+         sec_per_cluster = 8;
+      }
+      else if(format_parameters.partition_size < (512*1024*1024))
+      {
+         sec_per_cluster = 16;
+      }
+      else if(format_parameters.partition_size < (1024*1024*1024))
+      {
+         sec_per_cluster = 32;
+      }
+      else if(format_parameters.partition_size < (2*1024*1024*1024))
+      {
+         sec_per_cluster = 64;
+      }
+      else
+      {
+         /* TODO: Cant support partition larger than 4GB */
+         sec_per_cluster = 128;
+      }
+   }
+   else if(FAT_FORMAT_32 == format_parameters.fat_version)
+   {
+      if(format_parameters.partition_size < (260*1024*1024))
+      {
+         sec_per_cluster = 1;
+      }
+      else
+      {
+         /* TODO: Cant support partition larger than 4GB */
+         sec_per_cluster = 8;
+      }
+   }
+   else
+   {
+      /* Version not available */
+      return -1;
+   }
+
+   /* Initialize default ext2 superblock contents */
+   memset((uint8_t *)&boot_sector, 0, sizeof(fat_bootsector_t));
+
+   uint16_t sectorsize = blockInfo.size;
+   size_t num_sect = blockInfo.num;
+   uint32_t num_clusters = blockInfo.num / sec_per_cluster; /* 4 sectors per cluster */
+   uint16_t secperfat = max(1, (uint16_t) 0xFFFF & (2 * num_clusters / sectorsize ));
+
+   boot_sector = {
+      .jump = {0xeb, 0x3c, 0x90}, /* JMP 0x3c; NOP; */
+      .oemid = {0x45, 0x45, 0x45, 0x45, 0x45, 0x45, 0x45, 0x45}, /* "EEEEEEEE" */
+      .bpb = {
+         .bytepersec_l = (uint8_t)(sectorsize & 0xFF),
+         .bytepersec_h = (uint8_t)((sectorsize >> 8) & 0xFF),
+         .secperclus = 0x04, /* 2KB clusters */
+         .reserved_l = 0x01,    /* 1 reserved sector. */
+         .reserved_h = 0x0,
+         .numfats = 0x02,    /* 2 FAT copies */
+         .mediatype = 0xF8,
+         .secpertrk_l = 0x3F,
+         .heads_l = 0xFF,
+         .secperfat_l = (uint8_t)(secperfat & 0xFF),
+         .secperfat_h = (uint8_t)((secperfat >> 8) & 0xFF),
+         .rootentries_l = (uint8_t)(512 & 0xFF ), /* 512 for FAT16 */
+         .rootentries_h = (uint8_t)((512 >> 8) & 0xFF),
+      },
+      .ebpb = {
+         .ebpb = {
+            .unit = 0X80,
+            .signature = 0x29,
+            .serial_0 = 0x81,
+            .serial_1 = 0xDB,
+            .serial_2 = 0xF7,
+            .serial_3 = 0xBB,
+         },
+      },
+      .sig_55 = 0x55,
+      .sig_aa = 0xAA,
+   };
+
+   memcpy(boot_sector.code, bootcode, 130);
+
+   if (0xFFFF > num_sect)    {
+      boot_sector.bpb.sectors_s_l = (uint8_t)(num_sect & 0xFF);
+      boot_sector.bpb.sectors_s_h = (uint8_t)((num_sect >> 8) & 0xFF);
+   }
+   else
+   {
+      boot_sector.bpb.sectors_l_0 = (uint8_t)(num_sect & 0xFF );
+      boot_sector.bpb.sectors_l_1 = (uint8_t)((num_sect >> 8) & 0xFF);
+      boot_sector.bpb.sectors_l_2 = (uint8_t)((num_sect >> 16) & 0xFF);
+      boot_sector.bpb.sectors_l_3 = (uint8_t)((num_sect >> 24) & 0xFF);
+   }
+
+   switch (format_parameters.fat_version) {
+      case FAT_FORMAT_12:
+         boot_sector.ebpb.ebpb = {
+            .unit = 0X80,
+            .signature = 0x29,
+            .serial_0 = 0x81,
+            .serial_1 = 0xDB,
+            .serial_2 = 0xF7,
+            .serial_3 = 0xBB,
+         }
+         memcpy(boot_sector.ebpb.ebpb.system, FAT_SYSTEM12, sizeof(boot_sector.ebpb.ebpb.system));
+         memcpy(boot_sector.ebpb.ebpb.label, FAT_LABEL, sizeof(boot_sector.ebpb.ebpb.label));
+         break;
+      case FAT_FORMAT_16:
+         memcpy(boot_sector.ebpb.ebpb.system, FAT_SYSTEM16, sizeof(boot_sector.ebpb.ebpb.system));
+         memcpy(boot_sector.ebpb.ebpb.label, FAT_LABEL, sizeof(boot_sector.ebpb.ebpb.label));
+         break;
+      case FAT_FORMAT_32:
+         boot_sector.ebpb.ebpb32 = {
+            .fatsize_0 = (uint8_t) (secperfat & 0xFF),
+            .fatsize_1 = (uint8_t) ((secperfat >> 8) & 0xFF),
+            .fatsize_2 = (uint8_t) ((secperfat >> 16) & 0xFF),
+            .fatsize_3 = (uint8_t) ((secperfat >> 24) & 0xFF),
+            /* TODO fill flags? */
+            .fsver_l = 0x1, /* TODO fill actual fat version */
+            .fsver_h = 0x1,
+            .root_0  = 0x2, /* Root directory is in the second cluster */
+            .unit = 0X80,
+            .signature = 0x29,
+            .serial_0 = 0x81,
+            .serial_1 = 0xDB,
+            .serial_2 = 0xF7,
+            .serial_3 = 0xBB,
+         };
+         memcpy(boot_sector.ebpb.ebpb32.label, FAT_LABEL, sizeof(boot_sector.ebpb.ebpb32.label));
+         memcpy(boot_sector.ebpb.ebpb32.system, FAT_SYSTEM32, sizeof(boot_sector.ebpb.ebpb32.system));
+         break;
+      default:
+         return -1;
+   }
+
+   if(0 > fat_device_buf_write(dev, (uint8_t *)boot_sector,0,
+                                sizeof(fat_bootsector_t)))
+   {
+      return -1;
+   }
+
+
+
+   uint32_t cluster;
+   struct fat_fs_info fsi;
+   uint32_t pstart, psize;
+   uint8_t pactive, ptype;
+   struct dirent de;
+   int dev_blk_size = bdev_blk_sz(bdev);
+   int root_dir_sz;
+
+   assert(dev_blk_size > 0);
+
+   fsi.bdev = bdev;
+
+   /* Obtain pointer to first partition on first (only) unit */
+   /* This assumes there is a MBR. No MBR so skip */
+   //pstart = fat_get_ptn_start(bdev, 0, &pactive, &ptype, &psize);
+   //if (pstart == 0xffffffff) {
+   //   return -1;
+   //}
+
+   if (fat_get_volinfo(bdev, &fsi.vi, pstart)) {
+      return -1;
+   }
+
+   fat1_offset = ((uint16_t)boot_sector.bpb.reserved_l |
+                 (((uint16_t)boot_sector.bpb.reserved_h) << 8)) * sectorsize;
+
+   if(FAT_FORMAT_12 == format_parameters.fat_version ||
+      FAT_FORMAT_16 == format_parameters.fat_version)
+   {
+      rootdir_offset = ((uint16_t)boot_sector.bpb.secperfat_l |
+                        (((uint16_t)boot_sector.bpb.secperfat_h) << 8))*boot_sector.bpb.numfats;
+      dataarea_offset = rootdir_offset + 512 * 32; /* skip root entries 32 bytes each */
+                                                   /* TODO: roundup to sector size */
+      dataarea_offset += sectorsize - (dataarea_offset % sectorsize);
+   }
+   else /* FAT_FORMAT_32 */
+   {
+      dataarea_offset = ((uint16_t)boot_sector.bpb.secperfat_l |
+                        (((uint16_t)boot_sector.bpb.secperfat_h) << 8))*boot_sector.bpb.numfats;
+      rootdir_offset = (uint32_t) boot_sector.ebpb.ebpb32.root_0 |
+                       (((uint32_t) boot_sector.ebpb.ebpb32.root_1) << 8) |
+                       (((uint32_t) boot_sector.ebpb.ebpb32.root_2) << 16) |
+                       (((uint32_t) boot_sector.ebpb.ebpb32.root_3) << 24);
+      rootdir_offset *= sectorsize;
+   }
+   
+   volinfo->reservedsecs + (volinfo->secperfat * 2);
+   cluster = fsi.vi.rootdir / fsi.vi.secperclus;
+
+   de = (struct dirent) {
+      .name = "ROOT DIR   ",
+      .attr = ATTR_DIRECTORY,
+      .startclus_l_l = cluster & 0xff,
+      .startclus_l_h = (cluster & 0xff00) >> 8,
+      .startclus_h_l = (cluster & 0xff0000) >> 16,
+      .startclus_h_h = (cluster & 0xff000000) >> 24,
+   };
+
+   fat_set_filetime(&de);
+
+   /*
+    * write the directory entry
+    * note that we no longer have the sector containing the directory
+    * entry, tragically, so we have to re-read it
+    */
+
+   /* we clear other FAT TABLE */
+   memset(fat_sector_buff, 0, sizeof(fat_sector_buff));
+   memcpy(&(((struct dirent*) fat_sector_buff)[0]), &de, sizeof(struct dirent));
+
+   if (0 > block_dev_write(   bdev,
+               (char *) fat_sector_buff,
+               fsi.vi.bytepersec,
+               fsi.vi.rootdir * fsi.vi.bytepersec / dev_blk_size)) {
+      return DFS_ERRMISC;
+   }
+
+   root_dir_sz = (fsi.vi.rootentries * sizeof(struct dirent) + 
+       fsi.vi.bytepersec - 1) / fsi.vi.bytepersec - 1;
+
+   if (root_dir_sz)
+      memset(fat_sector_buff, 0, sizeof(struct dirent)); /* The rest is zeroes already */
+   /* Clear the rest of root directory */
+   while (root_dir_sz) {
+      block_dev_write(bdev,
+            (char *) fat_sector_buff,
+            fsi.vi.bytepersec,
+            (root_dir_sz + fsi.vi.rootdir) * fsi.vi.bytepersec / dev_blk_size);
+      root_dir_sz--;
+   }
+
+
+   /* Mark newly allocated cluster as end of chain */
+   switch (fsi.vi.filesystem) {
+      case FAT12:      cluster = 0xfff;   break;
+      case FAT16:      cluster = 0xffff;   break;
+      case FAT32:      cluster = 0x0fffffff;   break;
+      default:      return DFS_ERRMISC;
+   }
+   psize = 0;
+   fat_set_fat_(&fsi, fat_sector_buff, &psize, cluster, cluster);
+
 
    return 0;
 }
