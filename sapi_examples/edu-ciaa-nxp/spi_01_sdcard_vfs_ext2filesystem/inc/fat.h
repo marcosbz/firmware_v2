@@ -370,7 +370,7 @@ typedef struct fat_fs_info
   uint8_t  fs_fatsecperclus;       /* MBR: Sectors per allocation unit: 2**n, n=0..7 */
   uint8_t *fs_buffer;              /* This is an allocated buffer to hold one sector
                                     * from the device */
-} fat_fs_info_t;;
+} fat_fs_info_t;
 
 /** \brief ext2 file info
  **

@@ -211,14 +211,6 @@ static int ext2_file_map_alloc(vnode_t *node, uint32_t file_block, uint32_t *dev
  **/
 static int fat_buf_read_file(file_desc_t *file, uint8_t *buf, uint32_t size, uint32_t *total_read_size_p);
 
-/** \brief Read superblock data from formatted device
- **
- ** \param[in] device device from which to read the superblock
- ** \param[in] sb_p pointer to the structure containing the superblock raw data
- ** \return -1 if an error occurs, in other case 0
- **/
-static int ext2_get_superblock(Device dev, ext2_superblock_t * sb_p);
-
 /** \brief Write the on-memory superblock and group descriptors to disk
  **
  ** \param[in] node node whose filesystem information is to be sync with disk data
@@ -536,7 +528,7 @@ fsdriver_operations_t ext2_driver_operations =
 /** \brief Buffer used to read and write portions of blocks
  *
  */
-uint8_t ext2_block_buffer[EXT2_BLOCK_BUFFER_SIZE];
+uint8_t fat_sector_buffer[FAT_SECTOR_BUFFER_SIZE];
 fat_direntry_t fat_dir_entry_buffer;
 ext2_inode_t ext2_node_buffer;
 
@@ -569,19 +561,6 @@ static void assert_msg(int cond, char* msg, char * file, int line)
    {
       //printf("ERROR: Assert Failed in %s:%d %s\n", file, line, msg);
    }
-}
-
-int ext2_get_superblock(Device dev, ext2_superblock_t * sb_p)
-{
-   int32_t ret;
-
-   ret = ext2_device_buf_read(dev, (uint8_t *)sb_p, EXT2_SBOFF, sizeof(ext2_superblock_t));
-   if(ret)
-   {
-      return -1;
-   }
-
-   return 0;
 }
 
 static int ext2_read_inode(vnode_t *dest_node, uint32_t inumber)
@@ -785,408 +764,13 @@ static size_t fat_file_read(file_desc_t *file, void *buf, size_t size)
    return read_size;
 }
 
-static int ext2_file_ioctl(file_desc_t *file, int request)
+static int fat_file_ioctl(file_desc_t *file, int request)
 {
    return 0;
 }
 
-static int ext2_init(void *par)
+static int fat_init(void *par)
 {
-   return 0;
-}
-
-static int ext2_format(filesystem_info_t *fs, void *param)
-{
-   int ret;
-   Device dev;
-   BlockDevice bdev;
-   blockDevInfo_t blockInfo;
-   ext2_format_param_t format_parameters;
-
-   ext2_superblock_t superblock;
-   ext2_gd_t gd_buffer;
-   ext2_inode_t node;
-
-   uint16_t i, aux,group_index;
-   uint16_t ngroups, nblocks_gd, inodes_per_group, inodeblocks_per_group,
-            minmetablocks_per_group,  nblocks_last_group, nblocks_group_overhead;
-   uint32_t block_offset, free_blocks_count, free_inodes_count, write_offset;
-   uint32_t group_offset;
-   uint8_t   aux_byte;
-
-   dev = fs->device;
-   bdev = ooc_get_interface((Object)dev, BlockDevice);
-   ASSERT_MSG(bdev != NULL, "ext2_format(): dev parameter not a block device");
-   if(bdev == NULL)
-   {
-      return -1;
-   }
-   ret = bdev->ioctl((Object) dev, IOCTL_BLOCK_GETINFO, &blockInfo);
-   ASSERT_MSG(ret >= 0, "ext2_format(): ioctl() failed");
-   if(ret < 0)
-   {
-      return -1;
-   }
-   if(param == NULL)
-   {
-      /* Default format setup: 1KB Block and whole device */
-      format_parameters.block_size = 1024;
-      format_parameters.partition_size = blockInfo.num * blockInfo.size / format_parameters.block_size;
-      format_parameters.block_node_factor = EXT2_DEFAULT_BLOCKNODE_FACTOR;
-   }
-   else
-   {
-      memcpy((void *)&format_parameters, (void *)param, sizeof(ext2_format_param_t));
-      if(format_parameters.block_size < EXT2_MIN_BLOCKSIZE)
-         format_parameters.block_size = EXT2_MIN_BLOCKSIZE;
-      if(format_parameters.block_size > EXT2_MAX_BLOCKSIZE)
-         format_parameters.block_size = EXT2_MAX_BLOCKSIZE;
-      if(!(is_powerof2(format_parameters.block_size)))
-         return -1;
-      if(!(format_parameters.block_node_factor >= 2 && format_parameters.block_node_factor <= 10))
-         format_parameters.block_node_factor = EXT2_DEFAULT_BLOCKNODE_FACTOR;
-      /* Partition size must not exceed device size */
-      if(format_parameters.partition_size * format_parameters.block_size >= blockInfo.num * blockInfo.size)
-         return -1;
-   }
-
-   /* Initialize default ext2 superblock contents */
-   memset((uint8_t *)&superblock, 0, sizeof(ext2_superblock_t));
-
-   for(i = 0, aux = 1024; aux < format_parameters.block_size; i++, aux = 1024 << i);   /* blocksize log2 */
-   superblock.s_log_block_size = i;
-   superblock.s_log_frag_size = superblock.s_log_block_size;
-   superblock.s_first_data_block = (format_parameters.block_size > EXT2_SBOFF) ? 0 : 1;  /* First Data Block */
-   superblock.s_blocks_per_group = format_parameters.block_size*8;  /* Number of blocks per group */
-   superblock.s_frags_per_group = superblock.s_blocks_per_group;   /* Number of fragments per group */
-   superblock.s_wtime = 0;             /* Last write time */
-   superblock.s_mnt_count = 0;            /* Current mount count */
-   superblock.s_max_mnt_count = -1;        /* Max mount count */
-   superblock.s_magic = EXT2_MAGIC;                /* Magic number */
-   superblock.s_state = 1;                /* File system state. EXT2_VALID_FS */
-   superblock.s_errors = 1;               /* Behaviour when detecting errors. EXT2_ERRORS_CONTINUE */
-   superblock.s_lastcheck = 0;         /* time of last check */
-   superblock.s_rev_level = 0;         /* Good old rev */
-   superblock.s_first_ino = 11;         /* First non-reserved inode. EXT2_GOOD_OLD_FIRST_INO */
-   superblock.s_inode_size = 128;           /* size of inode structure. EXT2_GOOD_OLD_INODE_SIZE */
-   superblock.s_block_group_nr = 0;       /* block group # of this superblock */
-   superblock.s_feature_compat = 0x00;    /* compatible feature set */
-   superblock.s_feature_incompat = 0x00;  /* incompatible feature set */
-   superblock.s_feature_ro_compat = 0x00;  /* readonly-compatible feature set */
-   superblock.s_uuid[0] = 0;   /* 128-bit uuid for volume */
-   superblock.s_uuid[1] = 0;
-   superblock.s_uuid[2] = 0;
-   superblock.s_uuid[3] = 0;
-   superblock.s_uuid[4] = 0;
-   superblock.s_uuid[5] = 0;
-   superblock.s_uuid[6] = 0;
-   superblock.s_uuid[7] = 0;
-   superblock.s_uuid[8] = 0;
-   superblock.s_uuid[9] = 0;
-   superblock.s_uuid[10] = 0;
-   superblock.s_uuid[11] = 0;
-   superblock.s_uuid[12] = 0;
-   superblock.s_uuid[13] = 0;
-   superblock.s_uuid[14] = 0;
-   superblock.s_uuid[15] = 0;
-   strcpy((char *) superblock.s_volume_name, "ext2");      /* volume name */
-
-   /* Total blocks */
-   superblock.s_blocks_count = format_parameters.partition_size;
-   /* (block/node) factor = 4 */
-   superblock.s_inodes_count = superblock.s_blocks_count / format_parameters.block_node_factor;
-   /* Reserved blocks count */
-   superblock.s_r_blocks_count = 0;
-   /* Number of block groups */
-   ngroups = howmany(superblock.s_blocks_count - superblock.s_first_data_block,
-                     superblock.s_blocks_per_group);
-   /* Number of blocks reserved for the group descriptors in every group */
-   nblocks_gd = howmany(sizeof(ext2_gd_t)*ngroups, format_parameters.block_size);
-   /* Number of nodes which fit in a single block */
-   inodes_per_group = superblock.s_inodes_count / ngroups;
-   /* Number of blocks reserved for physical node allocations */
-   inodeblocks_per_group = howmany(superblock.s_inode_size * inodes_per_group, format_parameters.block_size);
-   /* Number of total metadata blocks per group */
-   minmetablocks_per_group = 1 /*Superblock*/ + nblocks_gd + 1 /*Block bitmap*/ +
-                     1 /*Inode bimap*/ + inodeblocks_per_group + 1 /*At least 1 data block*/;
-   ASSERT_MSG(format_parameters.partition_size > minmetablocks_per_group, "ext2_format(): Device size is too small");
-   if(format_parameters.partition_size <= minmetablocks_per_group)
-   {
-      /* Device size is not enough to hold minimum file system data */
-      return -1;
-   }
-   /* The last group contains generally less blocks than the others. It contains the remaining blocks */
-   nblocks_last_group = superblock.s_blocks_count - superblock.s_first_data_block -
-                        superblock.s_blocks_per_group * (ngroups - 1);
-
-   /* If the last group contains less blocks than the minimum allowed, eliminate the group */
-   if(nblocks_last_group < minmetablocks_per_group)
-   {
-      superblock.s_blocks_count -= nblocks_last_group;
-      ngroups--;
-      nblocks_last_group = superblock.s_blocks_per_group;
-      nblocks_gd = howmany(sizeof(ext2_gd_t)*ngroups, format_parameters.block_size);
-      inodes_per_group = superblock.s_inodes_count / ngroups;
-   }
-
-   ASSERT_MSG(inodes_per_group > 0, "ext2_format(): inodes_per_group == 0. Error");
-   /* The number of nodes in a group must be multiple of 8 */
-   superblock.s_inodes_per_group = rounddown(inodes_per_group, 8);
-   /* Total node count in disk */
-   superblock.s_inodes_count = inodes_per_group * ngroups;
-   /* Recalculate number of nodes which fit in a single block */
-   inodeblocks_per_group = howmany(superblock.s_inode_size * inodes_per_group, format_parameters.block_size);
-   /* Overhead blocks per group */
-   nblocks_group_overhead = 1/*Superblock*/ + nblocks_gd + 1 /*Blockbitmap*/+ 1 /*Inodebitmap*/+
-                              inodeblocks_per_group;
-
-   free_inodes_count=free_blocks_count=0;
-   for(group_index=0; group_index<ngroups; group_index++)
-   {
-      /*** INODE GROUPS DESCRIPTORS ***/
-      block_offset = superblock.s_first_data_block + superblock.s_blocks_per_group*group_index;
-      block_offset += 1 /*Superblock*/+ nblocks_gd;
-      gd_buffer.block_bitmap = block_offset;
-      block_offset += 1; /*Block bitmap*/
-      gd_buffer.inode_bitmap = block_offset;
-      block_offset += 1; /*Inode table*/
-      gd_buffer.inode_table = block_offset;
-      if(group_index == ngroups-1)
-         gd_buffer.free_blocks_count = nblocks_last_group -
-                                                      nblocks_group_overhead /*Overhead*/;
-      else if(group_index == 0)
-         /* Reserve a block for root entries */
-         gd_buffer.free_blocks_count = superblock.s_blocks_per_group - nblocks_group_overhead - 1;
-      else
-         gd_buffer.free_blocks_count = superblock.s_blocks_per_group - nblocks_group_overhead /*Overhead*/;
-      free_blocks_count += gd_buffer.free_blocks_count;
-      if(group_index == 0)
-         gd_buffer.free_inodes_count = superblock.s_inodes_per_group - EXT2_RESERVED_INODES;
-      else
-         gd_buffer.free_inodes_count = superblock.s_inodes_per_group;
-
-      free_inodes_count += gd_buffer.free_inodes_count;
-      gd_buffer.used_dirs_count = (group_index == 0) ? 1 : 0; /* Consider the root dir */
-      /* Write data to every group in the partition */
-      for(i=0, group_offset = superblock.s_first_data_block*format_parameters.block_size; i<ngroups;
-            i++, group_offset += superblock.s_blocks_per_group*format_parameters.block_size)
-      {
-         ret = ext2_device_buf_write(dev, (uint8_t *)&gd_buffer,
-                                       group_offset + format_parameters.block_size +
-                                       group_index*sizeof(ext2_gd_t), sizeof(ext2_gd_t));
-         ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_write() failed");
-         if(ret)
-         {
-            return -1;
-         }
-      }
-
-      /*** BLOCK BITMAP ***/
-      if(group_index == 0)
-      {
-         nblocks_group_overhead += 1; /* Consider the block containing root dir entries */
-      }
-      block_offset = gd_buffer.block_bitmap * format_parameters.block_size;
-      /* Must set non existent blocks as reserved
-       * Must set metadata blocks as reserved
-       */
-      /* Set the first bits representing busy blocks */
-      ret = ext2_device_buf_memset(dev, 0xFF, block_offset, nblocks_group_overhead/8);
-      ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_memset() failed");
-      if(ret < 0)
-      {
-         return -1;
-      }
-      /* Clear the last bits representing free blocks */
-      ret = ext2_device_buf_memset(dev, 0x00, block_offset + nblocks_group_overhead/8,
-                                    format_parameters.block_size - nblocks_group_overhead/8);
-      ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_memset() failed");
-      if(ret < 0)
-      {
-         return -1;
-      }
-      /* Before this, whole bytes were set or cleared. There is a byte which could not be 0x00 or 0xFF.
-       * Set the bits of this byte individually.
-       */
-      aux_byte = 0;
-      for(i=0; i<(nblocks_group_overhead%8);i++)
-      {
-         setbit(&aux_byte,i);
-      }
-      ret = ext2_device_buf_write(dev, (uint8_t *)&aux_byte, block_offset + nblocks_group_overhead/8, 1);
-      ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_write() failed");
-      if(ret < 0)
-      {
-         return -1;
-      }
-      if(group_index == 0)
-      {
-         nblocks_group_overhead -= 1; /* Consider the block containing root dir entries */
-      }
-
-
-      /*** INODE BITMAP ***/
-
-      /* The root inode is already considered in the reserved inodes */
-      block_offset = gd_buffer.inode_bitmap * format_parameters.block_size;
-      /* Inodes are all free at the beginning. Alloc special nodes later */
-      /* Clear the first bits corresponding to free inodes */
-      ret = ext2_device_buf_memset(dev, 0x00, block_offset, superblock.s_inodes_per_group/8);
-      ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_memset() failed");
-      if(ret < 0)
-      {
-         return -1;
-      }
-      /* Set the last bits representing non-existent inodes */
-      //printf("ext2_format(): INODE BITMAP: Set bits offset: %d quant: %d\n",
-                        //block_offset + superblock.s_inodes_per_group/8,
-                        //format_parameters.block_size - superblock.s_inodes_per_group/8);
-      ret = ext2_device_buf_memset(dev, 0xFF, block_offset + superblock.s_inodes_per_group/8,
-                                    format_parameters.block_size - superblock.s_inodes_per_group/8);
-      ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_memset() failed");
-      if(ret < 0)
-      {
-         return -1;
-      }
-      /* Before this, whole bytes were set or cleared. There is a byte which could not be 0x00 or 0xFF.
-       * Set the bits of this byte individually.
-       */
-      aux_byte = 0xFF;
-      for(i=0; i<(superblock.s_inodes_per_group%8);i++)
-      {
-         clrbit(&aux_byte,i);
-      }
-      ret = ext2_device_buf_write(dev, (uint8_t *)&aux_byte, block_offset + superblock.s_inodes_per_group/8, 1);
-      ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_write() failed");
-      if(ret)
-      {
-         return -1;
-      }
-      if (group_index == 0)
-      {
-         /* mark reserved inodes in first group */
-         ret = ext2_device_buf_memset(dev, 0xFF, block_offset, EXT2_RESERVED_INODES/8);
-         ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_memset() failed");
-         if(ret)
-         {
-            return -1;
-         }
-         /* Before this, whole bytes were set or cleared. There is a byte which could not be 0x00 or 0xFF.
-          * Set the bits of this byte individually.
-          */
-         aux_byte = 0;
-         for(i=0; i<(EXT2_RESERVED_INODES%8);i++)
-         {
-            setbit(&aux_byte,i);
-         }
-         ret = ext2_device_buf_write(dev, (uint8_t *)&aux_byte, block_offset + EXT2_RESERVED_INODES/8, 1);
-         ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_write() failed");
-         if(ret)
-         {
-            return -1;
-         }
-      }
-   }
-   /* These values change as new files are created */
-   superblock.s_free_inodes_count = free_inodes_count;
-   superblock.s_free_blocks_count = free_blocks_count;
-   /* write on-memory superblock to all groups */
-   for(group_index=0; group_index<ngroups; group_index++)
-   {
-      group_offset = (superblock.s_first_data_block + superblock.s_blocks_per_group) * format_parameters.block_size * group_index;
-      /* If the block size is 1024, block 0 is boot block, block 1 is superblock. Blocks 1 to 8192 are group 1 blocks
-       * Boot block dont count as group 1 block
-       */
-      /* If the block size is 2048, block 0 contains boot block and superblock.
-       */
-      write_offset = (group_index == 0) ? EXT2_SBOFF : group_offset;
-      /* Clear all superblock bytes */
-      ret = ext2_device_buf_memset(dev, 0, write_offset, EXT2_SBSIZE);
-      ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_memset() failed");
-      if(ret)
-      {
-         return -1;
-      }
-      superblock.s_block_group_nr = group_index;
-      /* Copy superblock to disk */
-      ret = ext2_device_buf_write(dev, (uint8_t *)&superblock, write_offset, sizeof(ext2_superblock_t));
-      ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_write() failed");
-      if(ret)
-      {
-         return -1;
-      }
-   }
-
-   /* Read first group descriptor */
-   ret = ext2_device_buf_read(dev, (uint8_t *)&gd_buffer, (superblock.s_first_data_block + 1)*format_parameters.block_size,
-                               sizeof(ext2_gd_t));
-   ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_read() failed");
-   if(ret)
-   {
-      return -1;
-   }
-   /* Clean all reserved inodes */
-   ret = ext2_device_buf_memset(dev, 0, gd_buffer.inode_table * format_parameters.block_size,
-                                 superblock.s_inode_size*EXT2_RESERVED_INODES);
-   ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_memset() failed");
-   if(ret)
-   {
-      return -1;
-   }
-   /* Create root directory */
-   memset(&node, 0, sizeof(ext2_inode_t));
-   node.i_mode = 040755;
-   node.i_uid = node.i_gid = 1000;
-   node.i_size = format_parameters.block_size;
-   node.i_atime = node.i_ctime = node.i_mtime = 0;
-   node.i_dtime = 0;
-   node.i_links_count = 2;
-   node.i_blocks = format_parameters.block_size / 512;
-
-   /* Reserve free block in first group for root directory data */
-   /* The block was already reserved when setting block bitmap bits. Its the first block after overhead blocks */
-   /* This block will be assigned to node.i_block[0] */
-   node.i_block[0] = nblocks_group_overhead;
-
-   /* Fill root inode */
-   ret = ext2_device_buf_write(dev, (uint8_t *)&node, gd_buffer.inode_table * format_parameters.block_size +
-                               superblock.s_inode_size, sizeof(ext2_inode_t)); /* Second inode in table. ROOT INODE */
-   ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_write() failed");
-   if(ret)
-   {
-      return -1;
-   }
-
-   /* Create root entry */
-
-   /* Self entry */
-   ext2_dir_entry_buffer.inode = 2;
-   ext2_dir_entry_buffer.rec_len = 12;
-   ext2_dir_entry_buffer.name_len = 1;
-   ext2_dir_entry_buffer.file_type = 2;
-   strcpy(ext2_dir_entry_buffer.name, ".");
-
-   ret = ext2_device_buf_write(dev, (uint8_t *)&ext2_dir_entry_buffer, node.i_block[0]*format_parameters.block_size, sizeof(ext2_direntry_t)); /* First entry, "." */
-   ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_write() failed");
-   if(ret)
-   {
-      return -1;
-   }
-
-   /* Parent entry */
-   ext2_dir_entry_buffer.inode = 2;
-   ext2_dir_entry_buffer.rec_len = format_parameters.block_size - 12;
-   ext2_dir_entry_buffer.name_len = 2;
-   ext2_dir_entry_buffer.file_type = 2;
-   strcpy(ext2_dir_entry_buffer.name, "..");
-
-   ret = ext2_device_buf_write(dev, (uint8_t *)&ext2_dir_entry_buffer, node.i_block[0]*format_parameters.block_size+12, sizeof(ext2_direntry_t)); /* Second entry, ".." */
-   ASSERT_MSG(ret >= 0, "ext2_format(): ext2_device_buf_write() failed");
-   if(ret)
-   {
-      return -1;
-   }
-
    return 0;
 }
 
@@ -1547,6 +1131,118 @@ static int fat_format(filesystem_info_t *fs, void *param)
 
 /* Set root info in mountpoint */
 /* Preconditions: dest_node is allocated in vfs */
+static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
+{
+   int ret;
+   Device dev;
+   fat_file_info_t *finfo;
+   fat_fs_info_t *fsinfo;
+   fat_masterbootrecord_t *mbr;
+
+   /* FIXME: This implementation needs the mount directory to be non existant.
+    *  Does not overwrite directory correctly
+    */
+   /* TODO: Root inode is a special case? */
+   finfo=dest_node->f_info.down_layer_info = (fat_file_info_t *) tlsf_malloc(fs_mem_handle, sizeof(fat_file_info_t));
+   if(NULL == finfo)
+   {
+      return -1;
+   }
+   fsinfo=dest_node->fs_info->down_layer_info = (fat_fs_info_t *) tlsf_malloc(fs_mem_handle, sizeof(fat_fs_info_t));
+   if(NULL == fsinfo)
+   {
+      return -1;
+   }
+   /* Load file system information to memory */
+   dev = dest_node->fs_info->device;
+
+   ret = bdev->ioctl((Object) dev, IOCTL_BLOCK_GETINFO, &blockInfo);
+   ASSERT_MSG(ret >= 0, "ext2_format(): ioctl() failed");
+   if(ret < 0)
+   {
+      return -1;
+   }
+
+   /* Read first 3 bytes to check if there is a MBR */
+   if(0 > fat_device_buf_read(dev, (uint8_t *)&fat_sector_buffer, 0, 3))
+   {
+      return -1;
+   }
+   if( (0xeb == mbr->bootcode[0]) &&
+       (0xeb == mbr->bootcode[0]) &&
+       (0xeb == mbr->bootcode[0]) )
+   {
+      /* No MBR, directly logical boot record */
+   }
+   else
+   {
+      /* MBR present. Look for active partition, its offset and size */
+      /* Read whole MBR */
+      if( 0 > fat_device_buf_read(dev, (uint8_t *)&mbr, 0, sizeof(fat_masterbootrecord_t)) )
+      {
+         return -1;
+      }
+      /* Search for active partition */
+      for(i=0; i<4; i++)
+      {
+         if(mbr->ptable[i].active)
+         {
+            break;
+         }
+      }
+      if(i=4) i=0; /* If no active partition, take first */
+      partition_offset = ((uint32_t) mbr->ptable[i].start_0)       |
+                         ((uint32_t) mbr->ptable[i].start_1 << 8)  |
+                         ((uint32_t) mbr->ptable[i].start_2 << 16) |
+                         ((uint32_t) mbr->ptable[i].start_3 << 24);
+
+      partition_size   = ((uint32_t) mbr->ptable[i].size_0)       |
+                         ((uint32_t) mbr->ptable[i].size_1 << 8)  |
+                         ((uint32_t) mbr->ptable[i].size_2 << 16) |
+                         ((uint32_t) mbr->ptable[i].size_3 << 24);
+      if((partition_offset + partition_size) > (0xFFFFFFFF / blockInfo.size)) /* Partition bigger than 4GB */
+      {
+         return -1;
+      }
+      partition_offset *= blockInfo.size;
+      partition.size *= blockInfo.size;
+   }
+   
+   /* Calculate the number of group descriptors from the superblock info */
+   ASSERT_MSG(fsinfo->e2sb.s_inodes_per_group>0, "ext2_mount(): s_inodes_per_group zero. Error");
+   fsinfo->s_groups_count = (fsinfo->e2sb.s_inodes_count)/(fsinfo->e2sb.s_inodes_per_group);
+   fsinfo->s_block_size = 1024 << fsinfo->e2sb.s_log_block_size;
+   fsinfo->sectors_in_block = fsinfo->s_block_size >> 9;   /* s_block_size/512 */
+   fsinfo->s_inodes_per_block = (fsinfo->s_block_size)/(fsinfo->e2sb.s_inode_size);
+   /* Size of the block chunks to be read in buffer */
+   fsinfo->s_buff_size = (EXT2_BLOCK_BUFFER_SIZE < fsinfo->s_block_size) ? EXT2_BLOCK_BUFFER_SIZE : fsinfo->s_block_size;
+   fsinfo->s_buff_per_block = fsinfo->s_block_size / fsinfo->s_buff_size;      /* How much chunks per block */
+
+
+
+typedef struct fat_fs_info
+{
+  off_t    fs_fatbase;             /* Logical block of start of filesystem (past resd sectors) */
+  off_t    fs_rootbase;            /* MBR: Cluster no. of 1st cluster of root dir */
+  off_t    fs_database;            /* Logical block of start data sectors */
+  uint32_t fs_nclusters;           /* Maximum number of data clusters */
+  uint32_t fs_nfatsects;           /* fat size */
+  uint32_t fs_fattotsec;           /* MBR: Total count of sectors on the volume */
+  uint32_t fs_fsifreecount;        /* FSI: Last free cluster count on volume */
+  uint32_t fs_fsinextfree;         /* FSI: Cluster number of 1st free cluster */
+  uint16_t fs_fatresvdseccount;    /* MBR: The total number of reserved sectors */
+  uint16_t fs_rootentcnt;          /* MBR: Count of 32-bit root directory entries */
+  uint8_t  fs_type;                /* FSTYPE_FAT12, FSTYPE_FAT16, or FSTYPE_FAT32 */
+  uint8_t  fs_fatnumfats;          /* MBR: Number of FATs (probably 2) */
+  uint8_t  fs_fatsecperclus;       /* Cluster size */
+} fat_fs_info_t;
+   ret = ext2_mount_load(dest_node);
+   ASSERT_MSG(ret>=0, "ext2_mount(): mount load failed");
+   return ret;
+}
+
+/* Set root info in mountpoint */
+/* Preconditions: dest_node is allocated in vfs */
 static int ext2_mount(filesystem_info_t *fs, vnode_t *dest_node)
 {
    int ret;
@@ -1592,6 +1288,7 @@ static int ext2_mount(filesystem_info_t *fs, vnode_t *dest_node)
    ASSERT_MSG(ret>=0, "ext2_mount(): mount load failed");
    return ret;
 }
+
 
 static int ext2_create_node(vnode_t *parent_node, vnode_t *child_node)
 {
