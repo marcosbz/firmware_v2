@@ -325,51 +325,22 @@ typedef struct ext2_inode
  ** fat file system information
  **
  **/
-
-//typedef struct ext2_fs_info
-//{
-//   ext2_superblock_t e2sb;
-//   uint32_t   s_block_size;         /* Block size in bytes. */
-//   uint32_t   s_inodes_per_block;   /* Number of inodes per block */
-//   uint32_t   s_itb_per_group;      /* Number of inode table blocks per group */
-//   uint32_t   s_ginfodb_count;      /* Number of group descriptor blocks */
-//   uint32_t   s_desc_per_block;     /* Number of group descriptors per block */
-//   uint32_t   s_groups_count;       /* Number of groups in the fs */
-//   uint8_t    sectors_in_block;     /* Sector is 512 bytes long */
-//   uint16_t   s_buff_size;          /* Size of the block chunks to be read in buffer */
-//   uint8_t    s_buff_per_block;     /* How much chunks per block */
-//} ext2_fs_info_t;
-
-//struct fat_fs_info {
-//	struct volinfo vi;
-//	struct block_dev *bdev;
-//	struct node *root;
-//};
-
 typedef struct fat_fs_info
 {
-  off_t    fs_hwsectorsize;        /* HW: Sector size reported by block driver*/
-  off_t    fs_hwnsectors;          /* HW: The number of sectors reported by the hardware */
-  off_t    fs_fatbase;             /* Logical block of start of filesystem (past resd sectors) */
-  off_t    fs_rootbase;            /* MBR: Cluster no. of 1st cluster of root dir */
-  off_t    fs_database;            /* Logical block of start data sectors */
-  off_t    fs_fsinfo;              /* MBR: Sector number of FSINFO sector */
-  off_t    fs_currentsector;       /* The sector number buffered in fs_buffer */
-  uint32_t fs_nclusters;           /* Maximum number of data clusters */
-  uint32_t fs_nfatsects;           /* MBR: Count of sectors occupied by one fat */
-  uint32_t fs_fattotsec;           /* MBR: Total count of sectors on the volume */
-  uint32_t fs_fsifreecount;        /* FSI: Last free cluster count on volume */
-  uint32_t fs_fsinextfree;         /* FSI: Cluster number of 1st free cluster */
-  uint16_t fs_fatresvdseccount;    /* MBR: The total number of reserved sectors */
-  uint16_t fs_rootentcnt;          /* MBR: Count of 32-bit root directory entries */
-  bool     fs_mounted;             /* true: The file system is ready */
-  bool     fs_dirty;               /* true: fs_buffer is dirty */
-  bool     fs_fsidirty;            /* true: FSINFO sector must be written to disk */
-  uint8_t  fs_type;                /* FSTYPE_FAT12, FSTYPE_FAT16, or FSTYPE_FAT32 */
-  uint8_t  fs_fatnumfats;          /* MBR: Number of FATs (probably 2) */
-  uint8_t  fs_fatsecperclus;       /* MBR: Sectors per allocation unit: 2**n, n=0..7 */
-  uint8_t *fs_buffer;              /* This is an allocated buffer to hold one sector
-                                    * from the device */
+   uint32_t partition_offset;       /* Logical block of start of filesystem (past resd sectors) */
+   uint32_t root_offset;            /* MBR: Cluster no. of 1st cluster of root dir */
+   uint32_t fat1_offset;
+   uint32_t data_offset;            /* Logical block of start data sectors */
+   uint32_t nclusters;              /* Maximum number of data clusters */
+   uint32_t fat_size;           /* fat size */
+   uint32_t partition_size;         /* MBR: Total count of sectors on the volume */
+   uint32_t free_cluster_count;        /* FSI: Last free cluster count on volume */
+   uint32_t nextfree;         /* FSI: Cluster number of 1st free cluster */
+   uint32_t reserved_count;    /* MBR: The total number of reserved sectors */
+   uint32_t root_entry_count;          /* MBR: Count of 32-bit root directory entries */
+   uint32_t fat_version;                /* FSTYPE_FAT12, FSTYPE_FAT16, or FSTYPE_FAT32 */
+   uint32_t numfats;          /* MBR: Number of FATs (probably 2) */
+   uint32_t cluster_size;       /* Cluster size */
 } fat_fs_info_t;
 
 /** \brief ext2 file info

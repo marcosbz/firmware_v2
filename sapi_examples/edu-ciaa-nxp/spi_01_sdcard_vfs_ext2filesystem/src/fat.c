@@ -1137,7 +1137,9 @@ static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
    Device dev;
    fat_file_info_t *finfo;
    fat_fs_info_t *fsinfo;
-   fat_masterbootrecord_t *mbr;
+   fat_masterbootrecord_t *mbr = &fat_sector_buffer;
+   fat_bootsector_t *lbr;
+   
 
    /* FIXME: This implementation needs the mount directory to be non existant.
     *  Does not overwrite directory correctly
@@ -1178,7 +1180,7 @@ static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
    {
       /* MBR present. Look for active partition, its offset and size */
       /* Read whole MBR */
-      if( 0 > fat_device_buf_read(dev, (uint8_t *)&mbr, 0, sizeof(fat_masterbootrecord_t)) )
+      if( 0 > fat_device_buf_read(dev, (uint8_t *)&fat_sector_buffer, 0, sizeof(fat_masterbootrecord_t)) )
       {
          return -1;
       }
@@ -1207,9 +1209,13 @@ static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
       partition_offset *= blockInfo.size;
       partition.size *= blockInfo.size;
    }
-   
+
+   if( 0 > fat_device_buf_read(dev, (uint8_t *)&fat_sector_buffer, partition_offset, sizeof(fat_bootsector_t)) )
+   {
+      return -1;
+   }
+   lbr = &fat_sector_buffer;
    /* Calculate the number of group descriptors from the superblock info */
-   ASSERT_MSG(fsinfo->e2sb.s_inodes_per_group>0, "ext2_mount(): s_inodes_per_group zero. Error");
    fsinfo->s_groups_count = (fsinfo->e2sb.s_inodes_count)/(fsinfo->e2sb.s_inodes_per_group);
    fsinfo->s_block_size = 1024 << fsinfo->e2sb.s_log_block_size;
    fsinfo->sectors_in_block = fsinfo->s_block_size >> 9;   /* s_block_size/512 */
@@ -1218,24 +1224,57 @@ static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
    fsinfo->s_buff_size = (EXT2_BLOCK_BUFFER_SIZE < fsinfo->s_block_size) ? EXT2_BLOCK_BUFFER_SIZE : fsinfo->s_block_size;
    fsinfo->s_buff_per_block = fsinfo->s_block_size / fsinfo->s_buff_size;      /* How much chunks per block */
 
+   fsinfo->partition_size = ((uint32_t) lbr->sectors_l_0)       |
+                            ((uint32_t) lbr->sectors_l_1 << 8)  |
+                            ((uint32_t) lbr->sectors_l_2 << 16) |
+                            ((uint32_t) lbr->sectors_l_3 << 24);
+   fsinfo->partition_offset = partition_offset;       /* Logical block of start of filesystem (past resd sectors) */
+   fsinfo->reserved_count = ( (uint16_t) lbr->reserved_l     ) |
+                            ( (uint16_t) lbr->reserved_h << 8);
+   fsinfo->fat1_offset = fsinfo->partition_offset + fsinfo->reserved_count * blockInfo.size;
+   fsinfo->root_entry_count = ( (uint16_t) lbr->rootentries_l     ) |
+                              ( (uint16_t) lbr->rootentries_h << 8);
+   /* If no predefined root entries, this is FAT32 */
 
+  fsinfo->root_offset = ;            /* MBR: Cluster no. of 1st cluster of root dir */
+  fsinfo->data_offset =;            /* Logical block of start data sectors */
+  fsinfo->nclusters =;              /* Maximum number of data clusters */
+  fsinfo->fat_size =;           /* fat size */
+  fsinfo->partition_size =;         /* MBR: Total count of sectors on the volume */
+  fsinfo->free_cluster_count =;        /* FSI: Last free cluster count on volume */
+  fsinfo->nextfree =;         /* FSI: Cluster number of 1st free cluster */
+  fsinfo->fat_version =;                /* FSTYPE_FAT12, FSTYPE_FAT16, or FSTYPE_FAT32 */
+  fsinfo->numfats =;          /* MBR: Number of FATs (probably 2) */
+  fsinfo->cluster_size =;       /* Cluster size */
 
-typedef struct fat_fs_info
-{
-  off_t    fs_fatbase;             /* Logical block of start of filesystem (past resd sectors) */
-  off_t    fs_rootbase;            /* MBR: Cluster no. of 1st cluster of root dir */
-  off_t    fs_database;            /* Logical block of start data sectors */
-  uint32_t fs_nclusters;           /* Maximum number of data clusters */
-  uint32_t fs_nfatsects;           /* fat size */
-  uint32_t fs_fattotsec;           /* MBR: Total count of sectors on the volume */
-  uint32_t fs_fsifreecount;        /* FSI: Last free cluster count on volume */
-  uint32_t fs_fsinextfree;         /* FSI: Cluster number of 1st free cluster */
-  uint16_t fs_fatresvdseccount;    /* MBR: The total number of reserved sectors */
-  uint16_t fs_rootentcnt;          /* MBR: Count of 32-bit root directory entries */
-  uint8_t  fs_type;                /* FSTYPE_FAT12, FSTYPE_FAT16, or FSTYPE_FAT32 */
-  uint8_t  fs_fatnumfats;          /* MBR: Number of FATs (probably 2) */
-  uint8_t  fs_fatsecperclus;       /* Cluster size */
-} fat_fs_info_t;
+   
+   fat1_offset = ((uint16_t)boot_sector.bpb.reserved_l |
+                 (((uint16_t)boot_sector.bpb.reserved_h) << 8)) * sectorsize;
+
+   if(FAT_FORMAT_12 == format_parameters.fat_version ||
+      FAT_FORMAT_16 == format_parameters.fat_version)
+   {
+      rootdir_offset = ((uint16_t)boot_sector.bpb.secperfat_l |
+                        (((uint16_t)boot_sector.bpb.secperfat_h) << 8))*boot_sector.bpb.numfats;
+      rootdir_offset *= sectorsize;
+      rootdir_offset += fat1_offset;
+      dataarea_offset = rootdir_offset + 512 * 32; /* skip root entries 32 bytes each */
+                                                   /* TODO: roundup to sector size */
+      dataarea_offset += sectorsize - (dataarea_offset % sectorsize);
+   }
+   else /* FAT_FORMAT_32 */
+   {
+      dataarea_offset = ((uint16_t)boot_sector.bpb.secperfat_l |
+                        (((uint16_t)boot_sector.bpb.secperfat_h) << 8))*boot_sector.bpb.numfats;
+      dataarea_offset *= sectorsize;
+      dataarea_offset += fat1_offset
+      rootdir_offset = (uint32_t) boot_sector.ebpb.ebpb32.root_0 |
+                       (((uint32_t) boot_sector.ebpb.ebpb32.root_1) << 8) |
+                       (((uint32_t) boot_sector.ebpb.ebpb32.root_2) << 16) |
+                       (((uint32_t) boot_sector.ebpb.ebpb32.root_3) << 24);
+      rootdir_offset *= sectorsize;
+   } 
+
    ret = ext2_mount_load(dest_node);
    ASSERT_MSG(ret>=0, "ext2_mount(): mount load failed");
    return ret;
