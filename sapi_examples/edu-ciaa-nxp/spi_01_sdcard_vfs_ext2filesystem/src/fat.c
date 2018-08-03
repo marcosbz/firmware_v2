@@ -1228,6 +1228,11 @@ static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
                             ((uint32_t) lbr->sectors_l_1 << 8)  |
                             ((uint32_t) lbr->sectors_l_2 << 16) |
                             ((uint32_t) lbr->sectors_l_3 << 24);
+   if(fsinfo->partition_size >= 0xFFFFFFFF / blockInfo.size)
+   {
+      return -1;
+   }
+   fsinfo->partition_size *= blockInfo.size;
    fsinfo->partition_offset = partition_offset;       /* Logical block of start of filesystem (past resd sectors) */
    fsinfo->reserved_count = ( (uint16_t) lbr->reserved_l     ) |
                             ( (uint16_t) lbr->reserved_h << 8);
@@ -1235,6 +1240,44 @@ static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
    fsinfo->root_entry_count = ( (uint16_t) lbr->rootentries_l     ) |
                               ( (uint16_t) lbr->rootentries_h << 8);
    /* If no predefined root entries, this is FAT32 */
+   if(0 == fsinfo->root_entry_count)
+   {
+      /* FAT32 */
+      fsinfo->fat_version = FAT_FORMAT_32;
+   }
+   else
+   {
+      /* Is this FAT12 or FAT16? */
+      if(fsinfo->partition_size > 4084 * blockInfo.size)
+      {
+         /* TODO: Seems that no system formats small partitions with FAT16. jdebp.eu/FGA/determining-fat-widths.html */
+         fsinfo->fat_version = FAT_FORMAT_16;
+      }
+      else
+      {
+         fsinfo->fat_version = FAT_FORMAT_12;
+      }
+      
+   }
+   fsinfo->cluster_size = lbr->bpb.secperclus * blockInfo.size;
+   if(FAT_FORMAT_12 == fsinfo->fat_version ||
+      FAT_FORMAT_16 == fsinfo->fat_version)
+   {
+      fsinfo->fat_size = (   ((uint16_t)lbr->bpb.secperfat_l) |
+                            (((uint16_t)lbr->bpb.secperfat_h) << 8) ) * blockInfo.size;
+   }
+   else
+   {
+      fsinfo->fat_size = (   ((uint16_t)lbr->ebpb.fatsize_0) |
+                            (((uint16_t)lbr->ebpb.fatsize_1) << 8) |
+                            (((uint16_t)lbr->ebpb.fatsize_1) << 16) |
+                            (((uint16_t)lbr->ebpb.fatsize_1) << 24) );
+      if(fsinfo->fat_size > 0xFFFFFFFF / blockInfo.size)
+      {
+         return -1;
+      }
+      fsinfo->fat_size *= blockInfo.size;
+   }
 
   fsinfo->root_offset = ;            /* MBR: Cluster no. of 1st cluster of root dir */
   fsinfo->data_offset =;            /* Logical block of start data sectors */
@@ -1243,7 +1286,6 @@ static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
   fsinfo->partition_size =;         /* MBR: Total count of sectors on the volume */
   fsinfo->free_cluster_count =;        /* FSI: Last free cluster count on volume */
   fsinfo->nextfree =;         /* FSI: Cluster number of 1st free cluster */
-  fsinfo->fat_version =;                /* FSTYPE_FAT12, FSTYPE_FAT16, or FSTYPE_FAT32 */
   fsinfo->numfats =;          /* MBR: Number of FATs (probably 2) */
   fsinfo->cluster_size =;       /* Cluster size */
 
