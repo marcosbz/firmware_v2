@@ -59,22 +59,39 @@ extern Device *fat_glue_dev;
  * Public functions
  ****************************************************************************/
 
+/* Como manejo el tema de fmount? Todos los devices van a tener el mismo numero drv
+   Guardar numero drive en fsinfo
+   Mas adelante podria tener una lista que relaciona drvnum con  device.
+   1) Pass argument as global variable
+   2) Use a list to associate devnumber and device, then pass device number allocated in fsinfo
+*/
 /* Initialize Disk Drive */
 DSTATUS disk_initialize(BYTE drv)
 {
-   if (drv) {
-      return STA_NOINIT;            /* Supports only single drive */
+   DRESULT res;
+   BlockDevice bdev;
+   blockDevInfo_t blockInfo;
+   blockDevState_t blockDevState;
+
+   if (NULL == fat_glue_dev) {
+      return RES_PARERR;
    }
-   /*   if (Stat & STA_NODISK) return Stat;   *//* No card in the socket */
 
-   if (Stat != STA_NOINIT) {
-      return Stat;               /* card is already enumerated */
-
+   bdev = ooc_get_interface((Object)*fat_glue_dev, BlockDevice);
+   if(bdev == NULL)
+   {
+      return RES_ERROR;
+   }
+   if( 0 > bdev->getState((Object)*fat_glue_dev, &blockDevState) );
+   {
+      return RES_ERROR;
+   }
+   if(BLKDEV_READY != blockDevState)
+   {
+      return STA_NOINIT;
    }
 
-   Stat &= ~STA_NOINIT;
-   return Stat;
-
+   return 0;
 }
 
 /* Disk Drive miscellaneous Functions */
@@ -83,6 +100,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
    DRESULT res;
    BlockDevice bdev;
    blockDevInfo_t blockInfo;
+   blockDevState_t blockDevState;
 
    if (NULL == fat_glue_dev) {
       return RES_PARERR;
@@ -143,7 +161,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
       {
          return RES_ERROR;
       }
-      *(DWORD *) buff = blockInfo.blockInfo->num;
+      *(DWORD *) buff = blockInfo.num;
       res = RES_OK;
       break;
 
@@ -152,7 +170,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
       {
          return RES_ERROR;
       }
-      *(DWORD *) buff = blockInfo.blockInfo->size;
+      *(DWORD *) buff = blockInfo.size;
       res = RES_OK;
       break;
 
@@ -172,64 +190,114 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
 /* Read Sector(s) */
 DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
 {
-   if (drv || !count) {
+   DRESULT res;
+   BlockDevice bdev;
+   blockDevInfo_t blockInfo;
+   blockDevState_t blockDevState;
+
+   if (NULL == fat_glue_dev) {
       return RES_PARERR;
    }
-   if (Stat & STA_NOINIT) {
+
+   bdev = ooc_get_interface((Object)*fat_glue_dev, BlockDevice);
+   if(bdev == NULL)
+   {
+      return RES_ERROR;
+   }
+
+   if( 0 > bdev->getState((Object)*fat_glue_dev, &blockDevState) );
+   {
+      return RES_ERROR;
+   }
+   if( BLKDEV_READY != blockDevState)
+   {
       return RES_NOTRDY;
    }
 
-   if (FSUSB_DiskReadSectors(hDisk, buff, sector, count)) {
-      return RES_OK;
-   }
-
-   return RES_ERROR;
-
-   ssize_t ret;
-   BlockDevice bdev = ooc_get_interface((Object)*fat_glue_dev, BlockDevice);
-
-   if(!bdev)
+   if( 0 > bdev->ioctl((Object)*fat_glue_dev, IOCTL_BLOCK_GETINFO, &blockInfo) )
    {
-      return -1;
+      return RES_ERROR;
    }
 
-   ret = bdev->lseek(((Object)*fat_glue_dev, offset, SEEK_SET);
-   if(ret!=offset)
+   if( offset != bdev->lseek(((Object)*fat_glue_dev, sector*blockInfo.size, SEEK_SET) )
    {
-      return -1;
+      return RES_ERROR;
    }
-   ret = bdev->read((Object)*fat_glue_dev, buf, nbyte);
-   if(ret!=nbyte)
+   if( nbyte != bdev->read((Object)*fat_glue_dev, buff, count) )
    {
-      return -1;
+      return RES_ERROR;
    }
 
-   return 0;
+   return RES_OK;
 }
 
 /* Get Disk Status */
 DSTATUS disk_status(BYTE drv)
 {
-   if (drv) {
-      return STA_NOINIT;   /* Supports only single drive */
+   BlockDevice bdev;
+   blockDevState_t blockDevState;
+
+   if (NULL == fat_glue_dev) {
+      return RES_PARERR;
    }
-   return Stat;
+
+   bdev = ooc_get_interface((Object)*fat_glue_dev, BlockDevice);
+   if(bdev == NULL)
+   {
+      return RES_ERROR;
+   }
+
+   if( 0 > bdev->getState((Object)*fat_glue_dev, &blockDevState) );
+   {
+      return STA_NOINIT;
+   }
+   if( BLKDEV_READY == blockDevState)
+   {
+      return 0;
+   }
+   return STA_NOINIT;
 }
 
 /* Write Sector(s) */
 DRESULT disk_write(BYTE drv, const BYTE *buff, DWORD sector, BYTE count)
 {
+   DRESULT res;
+   BlockDevice bdev;
+   blockDevInfo_t blockInfo;
+   blockDevState_t blockDevState;
 
-   if (drv || !count) {
+   if (NULL == fat_glue_dev) {
       return RES_PARERR;
    }
-   if (Stat & STA_NOINIT) {
+
+   bdev = ooc_get_interface((Object)*fat_glue_dev, BlockDevice);
+   if(bdev == NULL)
+   {
+      return RES_ERROR;
+   }
+
+   if( 0 > bdev->getState((Object)*fat_glue_dev, &blockDevState) );
+   {
+      return RES_ERROR;
+   }
+   if( BLKDEV_READY != blockDevState)
+   {
       return RES_NOTRDY;
    }
 
-   if (FSUSB_DiskWriteSectors(hDisk, (void *) buff, sector, count)) {
-      return RES_OK;
+   if( 0 > bdev->ioctl((Object)*fat_glue_dev, IOCTL_BLOCK_GETINFO, &blockInfo) )
+   {
+      return RES_ERROR;
    }
 
-   return RES_ERROR;
+   if( offset != bdev->lseek(((Object)*fat_glue_dev, sector*blockInfo.size, SEEK_SET) )
+   {
+      return RES_ERROR;
+   }
+   if( nbyte != bdev->write((Object)*fat_glue_dev, buff, count) )
+   {
+      return RES_ERROR;
+   }
+
+   return RES_OK;
 }
