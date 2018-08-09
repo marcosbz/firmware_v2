@@ -123,10 +123,7 @@ typedef struct fat_fs_info
  **/
 typedef struct fat_file_info
 {
-   //ext2_inode_t        *pinode;        /* Copy of on-disk inode */
-   //uint16_t            f_group;     /* Block group number in which the node resides */
-   uint32_t            f_pointer;   /* Local seek pointer */
-   uint32_t            f_inumber;   /* Inode number */
+   FIL *fatfs_fp;
    uint32_t            f_size;
 } fat_file_info_t;
 

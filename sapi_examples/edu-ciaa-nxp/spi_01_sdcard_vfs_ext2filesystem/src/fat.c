@@ -56,39 +56,6 @@
  * 20160101 v0.0.1 MZ initial version
  */
 
-/*
-TODO:
--Try to implement everything with static memory. Exceptions can occur
--Optimize algorithms in speed and memory usage
--Add new fields to finfo and fsinfo, as they help to avoid calculating every time a function is called
--Implement error codes. By now when an error is found, -1 is returned. No matter which error was produced
--Fix "addtogroup" description from doxygen
--Add more comments
--Optimize space by allocating minimal memory for non open files, and allocating structures only for open files.
-For example, make f_di field in fat_file_info a pointer, and alloc structure only for open files.
--Economize memory. Start with physical inode buffer.
-1)physical node buffer for every node. That consumes a lot of memory
-2)buffer only for open files.
-3)One buffer for all operations.
-
-With the buffer, the number of reads reduces, but the number of writes remain the same in most cases.
-A block cache for every thread could solve these problems. No big scalability then needed in fs implementation
-
-Thinking in the diference between 2) and 3).
-2) is more scalable than 3).
-3) is the most efficient in memory
-
-Is there a problem when multiple threads use the same file? There would be redundant reads. Again, that is solved with a block cache. I think there is no need to have an inode cache if there is a block cache.
-
-FIXME:
--Try to call return only once for every function. Use an auxiliary variable
--Review code entirely to see if the variable types are declared according to requirements
--For example, dont use uint32_t when only uint16_t is needed.
--Put variables in order for good alignment. First uint32_t, then uint16_t, etc.
--Block alloc does not delete block contents. Set them to 0
--In fat_format(), if format_parameters.partition_size == 16K then inodes_per_block == 0 then error
-*/
-
 /*==================[inclusions]=============================================*/
 
 #include <string.h>
@@ -134,16 +101,6 @@ static int fat_dir_add_entry(vnode_t *node, uint32_t ino, char *name, uint16_t n
  ** \return -1 if an error occurs, in other case 0
  **/
 static int fat_dir_delete_entry(vnode_t *node, char *name, uint16_t namlen);
-
-/** \brief read file data to a buffer
- **
- ** \param[in] dest_node node from which to read data
- ** \param[in] buf buffer to which copy data read
- ** \param[in] size size of the data to read, in bytes
- ** \param[out] total_read_size_p pointer to the variable indicating how many bytes were read
- ** \return -1 if an error occurs, in other case 0
- **/
-static int fat_buf_read_file(vnode_t *dest_node, uint8_t *buf, uint32_t size, uint32_t *total_read_size_p);
 
 /** \brief Read superblock data from formatted device
  **
@@ -504,22 +461,41 @@ static int fat_file_close(file_desc_t *file)
    return 0;
 }
 
+/* TODO: Ver el caso de EOF */
 static size_t fat_file_read(file_desc_t *file, void *buf, size_t size)
 {
    fat_file_info_t *finfo;
+   fat_fs_info_t *fsinfo;
+   Device dev;
    uint32_t read_size;
    int ret;
 
-   /*TODO: Validate file->cursor */
+   fsinfo = file->node->fs_info->down_layer_info;
    finfo = file->node->f_info.down_layer_info;
-   finfo->f_pointer = file->cursor;
-   ret = fat_buf_read_file(file->node, (uint8_t *)buf, size, &read_size);
+   dev = file->node->fs_info->device;
 
-   if(ret)
+   if(file->cursor > finfo->f_size)
+      file->cursor = finfo->f_size;
+   /*Truncate read size*/
+   if(file->cursor + size > finfo->f_size)
+      size = finfo->f_size - file->cursor;
+
+   /* Call Chan FatFS */
+   if( FR_OK == f_lseek (finfo->fatfs_fp, file->cursor) )
    {
-      return 0;
+      if( FR_OK == f_read(finfo->fatfs_fp, buf, size, &read_size) )
+      {
+         file->cursor += read_size;
+      }
+      else /* Error in f_read */
+      {
+
+      }
    }
-   file->cursor += read_size;
+   else /* Error in f_seek */
+   {
+
+   }
    return read_size;
 }
 
@@ -914,7 +890,7 @@ static int fat_format(filesystem_info_t *fs, void *param)
 /* Preconditions: dest_node is allocated in vfs */
 static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
 {
-   int ret;
+   int ret = -1;
    Device dev;
    fat_file_info_t *finfo;
    fat_fs_info_t *fsinfo;
@@ -933,23 +909,27 @@ static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
    {
       return -1;
    }
-   /* Load file system information to memory */
-   dev = dest_node->fs_info->device;
-   ret = fat_get_superblock(dev, &(fsinfo->e2sb));
-   if(ret)
-   {
-      return -1;
-   }
-   /* Calculate the number of group descriptors from the superblock info */
-   fsinfo->s_groups_count = (fsinfo->e2sb.s_inodes_count)/(fsinfo->e2sb.s_inodes_per_group);
-   fsinfo->s_block_size = 1024 << fsinfo->e2sb.s_log_block_size;
-   fsinfo->sectors_in_block = fsinfo->s_block_size >> 9;   /* s_block_size/512 */
-   fsinfo->s_inodes_per_block = (fsinfo->s_block_size)/(fsinfo->e2sb.s_inode_size);
-   /* Size of the block chunks to be read in buffer */
-   fsinfo->s_buff_size = (FAT_BLOCK_BUFFER_SIZE < fsinfo->s_block_size) ? FAT_BLOCK_BUFFER_SIZE : fsinfo->s_block_size;
-   fsinfo->s_buff_per_block = fsinfo->s_block_size / fsinfo->s_buff_size;      /* How much chunks per block */
 
-   ret = fat_mount_load(dest_node);
+   dev = dest_node->fs_info->device;
+   if( 0 <= fat_fatfs_associate_dev(&dev, &(fsinfo->fatfs_devnum)) )
+   {
+      if( FR_OK == f_mount(fsinfo->fatfs_devnum, &(fsinfo->fatfs_mounthandle)) )
+      {
+         if(0 <= fat_mount_load(dest_node) )
+         {
+            ret = 0
+         }
+      }
+      else
+      {
+
+      }
+   }
+   else
+   {
+
+   }
+
    return ret;
 }
 
@@ -1086,172 +1066,38 @@ static int fat_umount_subtree_rec(vnode_t *root)
 
 static size_t fat_file_write(file_desc_t *desc, void *buf, size_t size)
 {
-   int ret;
-
-   vnode_t *node;
-   Device dev;
-   fat_inode_t *pinode;
-   fat_file_info_t *finfo;
-   fat_fs_info_t *fsinfo;
-
-   node = desc->node;
-   dev = node->fs_info->device;
-   finfo = (fat_file_info_t *)node->f_info.down_layer_info;
-   fsinfo = (fat_fs_info_t *)node->fs_info->down_layer_info;
-
-   uint32_t buf_pos, remaining_write_size, device_block;
-   uint32_t write_size, write_offset;
-
-   if(NULL == finfo || NULL == fsinfo)
-   {
-      return 0;
-   }
-
-   finfo->f_pointer = desc->cursor;
-   buf_pos = 0;
-   remaining_write_size = size;
-   while (remaining_write_size > 0) {
-      /* Position inside current block */
-      write_offset = finfo->f_pointer % fsinfo->s_block_size;
-      /* #bytes to write to current block */
-      write_size = fsinfo->s_block_size - write_offset;
-      /* remaining bytes to write less than block size */
-      if (write_size > remaining_write_size)
-         write_size = remaining_write_size;
-      /* map file block to disk block */
-      ret = fat_file_map_alloc(node, finfo->f_pointer >> (10+fsinfo->e2sb.s_log_block_size), &device_block);
-      if(ret)
-      {
-         return 0;
-      }
-      /* write to current block */
-      ret = fat_device_buf_write(dev, (uint8_t *)buf + buf_pos,
-                                  (device_block<<(10+fsinfo->e2sb.s_log_block_size))+write_offset, write_size);
-      if(ret)
-      {
-         return -1;
-      }
-      /* update iterators */
-      finfo->f_pointer += write_size;
-      buf_pos += write_size;
-      remaining_write_size -= write_size;
-   }
-   /* all bytes written. Update pointers */
-   desc->cursor = finfo->f_pointer;
-   if(finfo->f_pointer > finfo->f_size)
-      finfo->f_size = finfo->f_pointer;
-   /* finfo->pinode->i_blocks was refreshed everytime fat_file_map_alloc() was called.
-    * Write inode in its position in disk
-    * flush memory info to disk
-    */
-   /* Refresh inode in disk */
-   pinode = &fat_node_buffer;
-   ret = fat_get_inode(node->fs_info, finfo->f_inumber, pinode);
-   if(0 > ret)
-   {
-      return -1;
-   }
-   pinode->i_size = finfo->f_size;
-   ret = fat_set_inode(node->fs_info, finfo->f_inumber, pinode);
-   if(0 > ret)
-   {
-      return -1;
-   }
-   /* Write to disk the changes made to superblock and block descriptors */
-   ret = fat_fsinfo_flush(node);
-   if(ret)
-   {
-      return 0;
-   }
-
-   return buf_pos;
-}
-
-
-
-static int fat_buf_read_file(vnode_t * dest_node, uint8_t *buf, uint32_t size, uint32_t *total_read_size_p)
-{
-   /* FIXME: If size>finfo->f_size error or truncate? */
-   int ret;
-   uint32_t file_block, block_offset;
-   uint32_t device_block, device_offset;
-   uint16_t block_size, block_shift, block_mask;
-   uint32_t total_remainder_size, block_remainder, read_size, buf_pos;
    fat_file_info_t *finfo;
    fat_fs_info_t *fsinfo;
    Device dev;
+   uint32_t write_size;
+   int ret;
 
-   fsinfo = dest_node->fs_info->down_layer_info;
-   finfo = dest_node->f_info.down_layer_info;
-   dev = dest_node->fs_info->device;
+   fsinfo = file->node->fs_info->down_layer_info;
+   finfo = file->node->f_info.down_layer_info;
+   dev = file->node->fs_info->device;
 
-   block_size = fsinfo->s_block_size;
-   block_shift = (uint16_t)fsinfo->e2sb.s_log_block_size + 10;
-   block_mask = (uint32_t)block_size-1;
+   if(file->cursor > finfo->f_size)
+      file->cursor = finfo->f_size;
 
-   file_block = finfo->f_pointer >> block_shift;
-   block_offset = finfo->f_pointer & block_mask;
-
-   if(NULL != total_read_size_p)
-      *total_read_size_p = 0;
-
-   if(finfo->f_pointer > finfo->f_size)
-      finfo->f_pointer = finfo->f_size;
-   /*Truncate read size*/
-   if(finfo->f_pointer + size > finfo->f_size)
-      size = finfo->f_size - finfo->f_pointer;
-
-   /* Must read total_remainder_size bytes from file.
-    * Cant read all in a row. It must be read block by block.
-    * First the disk block must be retrieved, which matches the actual file pointer.
-    * Start reading this block in position (offset%block_size).
-    * Must read at most to the end of this block.
-    * Copy chunk of read data to buffer.
-    * Subtract read bytes from total_remainder_size. Add read bytes to fpointer.
-    * Check loop condition and repeat iteration if valid
-    */
-
-   /* Init: total_remainder_size = size.
-    * Condition: total_remainder_size>0
-    */
-   for(   total_remainder_size = size, buf_pos = 0;
-      total_remainder_size>0;)
+   /* Call Chan FatFS */
+   if( FR_OK == f_lseek(finfo->fatfs_fp, file->cursor) )
    {
-      file_block = finfo->f_pointer >> block_shift;
-      block_offset = finfo->f_pointer & block_mask;
-      ret = fat_block_map(dest_node, file_block, &device_block);
-      if(ret)
+      if( FR_OK == f_write(finfo->fatfs_fp, buf, size, &read_size) )
       {
-         if(NULL != total_read_size_p)
-            *total_read_size_p = buf_pos;
-         return ret;
+         if(file->cursor + size > finfo->f_size)
+            finfo->f_size = file->cursor + size;
+         file->cursor += read_size;
       }
-      device_offset = (device_block << block_shift) + block_offset;
-
-      block_remainder = block_size - block_offset;
-      if(total_remainder_size > block_remainder)
-         read_size = block_remainder;
-      else
-         read_size = total_remainder_size;
-
-      ret = fat_device_buf_read(dev, (uint8_t *)(buf+buf_pos), device_offset, read_size);
-      if(ret)
+      else /* Error in f_write */
       {
-         if(NULL != total_read_size_p)
-            *total_read_size_p = buf_pos;
-         return -1;
+
       }
-      buf_pos += read_size;
-      finfo->f_pointer += read_size;
-      total_remainder_size -= read_size;
    }
+   else /* Error in f_seek */
+   {
 
-   if(NULL != total_read_size_p)
-      *total_read_size_p = buf_pos;
-   if(buf_pos != size)
-      return -1;
-
-   return 0;
+   }
+   return read_size;
 }
 
 static int fat_mount_load(vnode_t *dir_node)
@@ -1260,6 +1106,7 @@ static int fat_mount_load(vnode_t *dir_node)
 
    /* FIXME: How to mount on an existing directory with previous data? How to overwrite? How to recover previous subtree? */
    /* Read root inode */
+   FRESULT f_open (FIL*, const TCHAR*, BYTE);
    ret = fat_read_inode(dir_node, FAT_ROOTINO);   //Estoy sobreescribiendo algo de lo que tenia antes?
    if(ret)
    {
