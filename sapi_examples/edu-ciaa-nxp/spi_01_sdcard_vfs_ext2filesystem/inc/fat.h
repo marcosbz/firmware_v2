@@ -72,6 +72,7 @@
 #define FAT_MAX_MOUNTS 10
 /** \brief Size of array fat_buffer defined in fat.c. Its used to read and write portions of clusters */
 #define FAT_BUFFER_SIZE 1024
+#define FAT_NAME_BUFFER_SIZE 256
 /** \brief fat_buffer */
 #define FAT_PATH_MAX 50
 
@@ -123,7 +124,8 @@ typedef struct fat_fs_info
  **/
 typedef struct fat_file_info
 {
-   FIL *fatfs_fp;
+   FIL fatfs_fp;
+   FILINFO fno;
    uint32_t            f_size;
 } fat_file_info_t;
 
