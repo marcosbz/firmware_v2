@@ -117,19 +117,6 @@ static int fat_get_superblock(Device dev, fat_superblock_t * sb_p);
  **/
 static int fat_fsinfo_flush(vnode_t *node);
 
-/** \brief Load all directories and files starting from root recursively to the vfs tree
- **
- ** \param[in] dir_node directory to be the root of the new mount
- ** \return -1 if an error occurs, in other case 0
- **/
-static int fat_mount_load(vnode_t *dir_node);
-
-/** \brief auxiliary function for fat_mount_load()
- **
- ** \param[in] dir_node subtree directory to mount recursively
- ** \return -1 if an error occurs, in other case 0
- **/
-static int fat_mount_load_rec(vnode_t *dir_node);
 
 static int fat_search_directory(vnode_t *node, char *name, uint16_t namlen, uint32_t *inumber_p);
 
@@ -331,7 +318,7 @@ fsdriver_operations_t fat_driver_operations =
  *
  */
 uint8_t fat_buffer[FAT_BUFFER_SIZE];
-uint8_t fat_name_buffer[FAT_NAME_BUFFER_SIZE];
+uint8_t fat_path_buffer[FAT_PATH_BUFFER_SIZE];
 
 /*==================[external data definition]===============================*/
 
@@ -429,36 +416,27 @@ static int fat_search_directory(vnode_t *node, char *name, uint16_t namlen, uint
 
 static int fat_file_open(file_desc_t *file)
 {
+   int ret = -1;
    fat_file_info_t *finfo;
-   //int ret;
-   finfo = file->node->f_info.down_layer_info;
-   /*
-   finfo->pinode = (fat_inode_t *) tlsf_malloc(fs_mem_handle, sizeof(fat_inode_t));
-   if(NULL == finfo->pinode)
-   {
-      return -1;
-   }
-   ret = fat_get_inode(&(file->node->fs_info), finfo->f_inumber, finfo->pinode);
-   if(0 > ret)
-   {
-      return -1;
-   }
-   */
-   finfo->f_pointer = 0;
-   /* reset seek pointer */
 
-   return 0;
+   finfo = file->node->f_info.down_layer_info;
+
+   /* Call Chan FatFS */
+   if( FR_OK == f_lseek (finfo->fatfs_fp, file->cursor) )
+   {
+      ret = 0;
+   }
+   else /* Error in f_seek */
+   {
+
+   }
+   
+
+   return ret;
 }
 
 static int fat_file_close(file_desc_t *file)
 {
-   //fat_file_info_t *finfo;
-   /*
-   finfo = file->node->f_info.down_layer_info;
-   tlsf_free(fs_mem_handle, (void *)finfo->pinode);
-   finfo->pinode = NULL;
-   */
-
    return 0;
 }
 
@@ -914,19 +892,24 @@ static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
    dev = dest_node->fs_info->device;
    if( 0 <= fat_fatfs_associate_dev(&dev, &(fsinfo->fatfs_devnum)) )
    {
-      /* TODO: armar fat_name_buffer para mount. Utilizar devnum. 0:path, 1:path, etc. */
-      fat_name_buffer[0] = fsinfo->fatfs_devnum + '0';
-      fat_name_buffer[1] = ':'; fat_name_buffer[2] = '\0';
-      if( FR_OK == f_mount(fsinfo->fatfs_devnum, fat_name_buffer, fsinfo->fatfs_mounthandle) )
+      /* TODO: armar fat_path_buffer para mount. Utilizar devnum. 0:path, 1:path, etc. */
+      fat_path_buffer[0] = fsinfo->fatfs_devnum + '0';
+      fat_path_buffer[1] = ':'; fat_path_buffer[2] = '\0';
+      if( FR_OK == f_mount(fsinfo->fatfs_devnum, fat_path_buffer, fsinfo->fatfs_mounthandle) )
       {
-         if(0 <= fat_mount_load(dest_node) )
+         if( FR_OK == scan_files(dest_node) )
          {
             ret = 0
          }
+         else /* Error in scan_files() */
+         {
+         }
       }
-      else
+      else /* Error in f_mount() */
       {
          fsinfo->fatfs_mounthandle = NULL;
+         tlsf_free(fs_mem_handle, (void *)dest_node->fs_info->down_layer_info);
+         tlsf_free(fs_mem_handle, (void *)dest_node->f_info.down_layer_info);
       }
    }
    else /* Failed to associate device with devnumber */
@@ -936,6 +919,30 @@ static int fat_mount(filesystem_info_t *fs, vnode_t *dest_node)
 
    return ret;
 }
+
+#if 0
+int fat_fatfs_associate_dev(Device *dev, uint8_t devnum)
+{
+   int ret = -1;
+   uint8_t i;
+
+   if(devnum < 10)
+   {
+      for(i=0; i<10; i++)
+      {
+         if(NULL == fat_device_association_list[i]) /* Found free devnum */
+         {
+            fat_device_association_list[i] = dev;
+         }
+      }
+      if(10 > i) /* a devnum was available */
+      {
+         ret = 0;
+      }
+   }
+   return ret;
+}
+#endif
 
 static int fat_create_node(vnode_t *parent_node, vnode_t *child_node)
 {
@@ -1104,76 +1111,8 @@ static size_t fat_file_write(file_desc_t *desc, void *buf, size_t size)
    return read_size;
 }
 
-static int fat_mount_load(vnode_t *dir_node)
-{
-   int ret;
-   fat_file_info_t *finfo;
-   fat_fs_info_t *fsinfo;
-   Device dev;
-
-   fsinfo = dir_node->fs_info->down_layer_info;
-   finfo = dir_node->f_info.down_layer_info;
-   dev = dir_node->fs_info->device;
-
-   /* FIXME: How to mount on an existing directory with previous data? How to overwrite? How to recover previous subtree? */
-   /* Read root inode */
-   /* "\$devnum:/" fat_name_buffer */
-   fat_name_buffer[0] = fsinfo->fatfs_devnum + '0';
-   fat_name_buffer[1] = ':'; fat_name_buffer[2] = '\0';
-   if( FR_OK == f_open(&finfo->fatfs_fp, fat_name_buffer, FA_OPEN_EXISTING | FA_READ | FA_WRITE) )
-   {
-
-   }
-   ret = fat_read_inode(dir_node, FAT_ROOTINO);   //Estoy sobreescribiendo algo de lo que tenia antes?
-   if(ret)
-   {
-      return -1;
-   }
-   ret = fat_mount_load_rec(dir_node);
-   if(ret)
-   {
-      return -1;
-   }
-
-   return 0;
-}
-
-FRESULT scan_files(uint8_t *path)
-{
-   FRESULT res;
-   DIR dir;
-   uint32_t i;
-   static FILINFO fno;
-
-   if( FR_OK == f_opendir(&dir, path) )
-   {
-      while(1)
-      {
-         res = f_readdir(&dir, &fno);
-         if(FR_OK == res && 0 != fno.fname[0]) break; /* error or EOF */
-         if(fno.fattrib & AM_DIR)
-         {
-            i = strlen(path);
-            sprintf(&path[i], "%s", fno.name);
-            res = scan_files(path);
-            if(FR_OK != res) break;
-            path[i] = 0;
-         }
-         else
-         {
-            printf("%s/%s\n", path, fno.fname);
-         }
-      }
-      f_closedir(&dir);
-   }
-   else
-   {
-
-   }
-   return res;
-}
-
-FRESULT scan_files(uint8_t *path)
+/* Uses fat_path_buffer[] */
+FRESULT scan_files(vnode_t dir_node)
 {
    FRESULT res;
    DIR dir;
@@ -1183,7 +1122,8 @@ FRESULT scan_files(uint8_t *path)
    fat_file_info_t *finfo;
    fat_fs_info_t *fsinfo;
 
-   if( FR_OK == f_opendir(&dir, path) )
+   res = f_opendir(&dir, fat_path_buffer);
+   if( FR_OK == res )
    {
       while(1)
       {
@@ -1193,28 +1133,43 @@ FRESULT scan_files(uint8_t *path)
          child_node = vfs_create_child(dir_node, fno.name, FS_NAME_MAX, 0);
          if(NULL == child_node)
          {
-            return -1;
+            res = FR_NOT_ENOUGH_CORE;
+            break;
          }
          /* Alloc and initialize the file low level information */
          child_node->f_info.down_layer_info = (fat_file_info_t *) tlsf_malloc(fs_mem_handle, sizeof(fat_file_info_t));
          if(NULL == child_node->f_info.down_layer_info || NULL == child_node->fs_info->down_layer_info)   //FIXME
          {
-            return -1;
+            res = FR_NOT_ENOUGH_CORE;
+            break;
          }
          /* Only read data if this is a regular file. Dont read directory data? */
          finfo = child_node->f_info.down_layer_info;
          memcpy((void *)&(finfo->fno), (void *)&fno, sizeof(FILINFO));
          if(fno.fattrib & AM_DIR)
          {
-            i = strlen(path);
-            sprintf(&path[i], "%s", fno.name);
-            res = scan_files(path);
+            i = strlen(fat_path_buffer);
+            if( &fat_path_buffer[FAT_PATH_BUFFER_SIZE] == strncpy(&fat_path_buffer[i],
+                fno.name, FAT_PATH_BUFFER_SIZE - i) )
+            {
+               /* End of path reached */
+               return -1;
+            }
+            res = scan_files(fat_path_buffer, &child_node);
             if(FR_OK != res) break;
-            path[i] = 0;
+            fat_path_buffer[i] = 0;
          }
          else
          {
-            printf("%s/%s\n", path, fno.fname);
+            res = f_open(&(finfo->fatfs_fp), fat_path_buffer, FA_READ | FA_WRITE);
+            if( FR_OK == res )
+            {
+               
+            }
+            else /* Open failed */
+            {
+               break;
+            } 
          }
       }
       f_closedir(&dir);
@@ -1224,130 +1179,6 @@ FRESULT scan_files(uint8_t *path)
 
    }
    return res;
-}
-
-#if 0
-         child_node = vfs_create_child(dir_node, fat_dir_entry_buffer.name, fat_dir_entry_buffer.name_len, 0);
-         if(NULL == child_node)
-         {
-            return -1;
-         }
-         /* Alloc and initialize the file low level information */
-         child_node->f_info.down_layer_info = (fat_file_info_t *) tlsf_malloc(fs_mem_handle, sizeof(fat_file_info_t));
-         if(NULL == child_node->f_info.down_layer_info || NULL == child_node->fs_info->down_layer_info)   //FIXME
-         {
-            return -1;
-         }
-         /* Read node data from disk */
-         if(0 > fat_read_inode(child_node, fat_dir_entry_buffer.inode) )
-         {
-            return -1;
-         }
-         if(FAT_FT_DIR == fat_dir_entry_buffer.file_type)
-         {
-            if( 0 > fat_mount_load_rec(child_node) )
-            {
-               return -1;
-            }
-         }
-#endif
-
-
-/* Precondition: mount root inode must be initialized */
-static int fat_mount_load_rec(vnode_t *dir_node)
-{
-   vnode_t *child_node;
-   fat_direntry_t fat_dir_entry_buffer;
-   uint32_t data_block, block_offset, file_pointer;
-   uint16_t entry_pointer;
-   int ret, mode;
-
-   Device dev;
-   fat_file_info_t *finfo;
-   fat_fs_info_t *fsinfo;
-
-   dev = dir_node->fs_info->device;
-   finfo = (fat_file_info_t *)dir_node->f_info.down_layer_info;
-   fsinfo = (fat_fs_info_t *)dir_node->fs_info->down_layer_info;
-
-   /* size must be multiple of block size. Dont consider special cases */
-   /* jump from block to block in every iteration */
-   for(file_pointer = 0; file_pointer < finfo->f_size; file_pointer += fsinfo->s_block_size)
-   {
-      /* Map file block to disk block. Result in data_block */
-      ret = fat_block_map(dir_node, file_pointer>>(10+fsinfo->e2sb.s_log_block_size), &data_block);
-      if(ret)
-      {
-         return -1;
-      }
-      /* block_offset points to the first byte address of the current block */
-      block_offset = data_block<<(10+fsinfo->e2sb.s_log_block_size);
-      /* entry pointer iterates sequentially over the entries until it reaches the end of the block */
-      for(entry_pointer = 0; entry_pointer < fsinfo->s_block_size;
-            entry_pointer += fat_dir_entry_buffer.rec_len)
-      {
-         /* Read entry fields, except for the name. 8 bytes in total */
-
-         ret = fat_device_buf_read(dev, (uint8_t *)&fat_dir_entry_buffer, block_offset + entry_pointer, 8);
-         if(ret)
-         {
-            return -1;
-         }
-         if(8 >= fat_dir_entry_buffer.rec_len)
-         {
-            break;
-         }
-         if(0 == fat_dir_entry_buffer.inode)
-         {
-            continue;
-         }
-         if(((fat_dir_entry_buffer.rec_len - 8) < fat_dir_entry_buffer.name_len) ||
-            (FAT_MAXNAMELEN < fat_dir_entry_buffer.name_len))
-         {
-            continue; /* Directory corrupt */
-         }
-         /* Read the name of the entry */
-         ret = fat_device_buf_read(dev, (uint8_t *)fat_dir_entry_buffer.name, block_offset + entry_pointer + 8,
-                                    fat_dir_entry_buffer.name_len);
-         if(ret)
-         {
-            return -1;
-         }
-         ////printf("fat_mount_load_rec():Current entry: %.*s\n", fat_dir_entry_buffer.name_len,
-         //                  fat_dir_entry_buffer.name);
-         if(!strncmp(fat_dir_entry_buffer.name, ".", 1) || !strncmp(fat_dir_entry_buffer.name, "..", 2))
-         {
-            continue;
-         }
-         mode=0;
-         child_node = vfs_create_child(dir_node, fat_dir_entry_buffer.name, fat_dir_entry_buffer.name_len, mode);
-         if(NULL == child_node)
-         {
-            return -1;
-         }
-         /* Alloc and initialize the file low level information */
-         child_node->f_info.down_layer_info = (fat_file_info_t *) tlsf_malloc(fs_mem_handle, sizeof(fat_file_info_t));
-         if(NULL == child_node->f_info.down_layer_info || NULL == child_node->fs_info->down_layer_info)   //FIXME
-         {
-            return -1;
-         }
-         /* Read node data from disk */
-         ret = fat_read_inode(child_node, fat_dir_entry_buffer.inode);
-         if(ret)
-         {
-            return -1;
-         }
-         if(FAT_FT_DIR == fat_dir_entry_buffer.file_type)
-         {
-            ret = fat_mount_load_rec(child_node);
-            if(ret)
-            {
-               return -1;
-            }
-         }
-      }
-   }
-   return 0;
 }
 
 static int fat_create_regular_file(vnode_t *parent_node, vnode_t *node)

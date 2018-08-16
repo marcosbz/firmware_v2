@@ -71,12 +71,8 @@
 /** \brief Maximum quantity of simultaneous mounts */
 #define FAT_MAX_MOUNTS 10
 /** \brief Size of array fat_buffer defined in fat.c. Its used to read and write portions of clusters */
-#define FAT_BUFFER_SIZE 1024
-#define FAT_NAME_BUFFER_SIZE 256
-/** \brief fat_buffer */
-#define FAT_PATH_MAX 50
+#define FAT_PATH_BUFFER_SIZE 256
 
-#define   FAT_MAXNAMELEN   255
 
 /* Bitmap handle macros */
 /* Set the bit i from array */
@@ -107,15 +103,7 @@
  **/
 typedef struct fat_fs_info
 {
-   uint32_t   s_block_size;         /* Block size in bytes. */
-   uint32_t   s_inodes_per_block;   /* Number of inodes per block */
-   uint32_t   s_itb_per_group;      /* Number of inode table blocks per group */
-   uint32_t   s_ginfodb_count;      /* Number of group descriptor blocks */
-   uint32_t   s_desc_per_block;     /* Number of group descriptors per block */
-   uint32_t   s_groups_count;       /* Number of groups in the fs */
-   uint8_t    sectors_in_block;     /* Sector is 512 bytes long */
-   uint16_t   s_buff_size;          /* Size of the block chunks to be read in buffer */
-   uint8_t    s_buff_per_block;     /* How much chunks per block */
+   FATFS fatfs_mounthandle;
 } fat_fs_info_t;
 
 /** \brief fat file info
