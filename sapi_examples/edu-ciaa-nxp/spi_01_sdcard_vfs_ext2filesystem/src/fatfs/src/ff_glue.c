@@ -49,7 +49,8 @@ static DISK_HANDLE_T *hDisk;
  * Public types/enumerations/variables
  ****************************************************************************/
 
-extern Device *fat_glue_dev;
+//extern Device *fat_glue_dev;
+extern Device *fat_device_association_list[10];
 
 /*****************************************************************************
  * Private functions
@@ -73,16 +74,16 @@ DSTATUS disk_initialize(BYTE drv)
    blockDevInfo_t blockInfo;
    blockDevState_t blockDevState;
 
-   if (NULL == fat_glue_dev) {
+   if (NULL == fat_device_association_list[drv]) {
       return RES_PARERR;
    }
 
-   bdev = ooc_get_interface((Object)*fat_glue_dev, BlockDevice);
+   bdev = ooc_get_interface((Object)*(fat_device_association_list[drv]), BlockDevice);
    if(bdev == NULL)
    {
       return RES_ERROR;
    }
-   if( 0 > bdev->getState((Object)*fat_glue_dev, &blockDevState) );
+   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
    {
       return RES_ERROR;
    }
@@ -102,11 +103,11 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
    blockDevInfo_t blockInfo;
    blockDevState_t blockDevState;
 
-   if (NULL == fat_glue_dev) {
+   if (NULL == fat_device_association_list[drv]) {
       return RES_PARERR;
    }
 
-   bdev = ooc_get_interface((Object)*fat_glue_dev, BlockDevice);
+   bdev = ooc_get_interface((Object)*(fat_device_association_list[drv]), BlockDevice);
    if(bdev == NULL)
    {
       return RES_ERROR;
@@ -126,7 +127,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
       BLKDEV_SYNCING
    } blockDevState_t;
    */
-   if( 0 > bdev->getState((Object)*fat_glue_dev, &blockDevState) );
+   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
    {
       return RES_ERROR;
    }
@@ -144,7 +145,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
       }
       for(i=0; i<0xFFFFFF; i++)
       {
-         if( 0 > bdev->getState((Object)*fat_glue_dev, &blockDevState) );
+         if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
          {
             return RES_ERROR;
          }
@@ -157,7 +158,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
       break;
 
    case GET_SECTOR_COUNT:   /* Get number of sectors on the disk (DWORD) */
-      if( 0 > bdev->ioctl((Object)*fat_glue_dev, IOCTL_BLOCK_GETINFO, &blockInfo) )
+      if( 0 > bdev->ioctl((Object)*(fat_device_association_list[drv]), IOCTL_BLOCK_GETINFO, &blockInfo) )
       {
          return RES_ERROR;
       }
@@ -166,7 +167,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
       break;
 
    case GET_SECTOR_SIZE:   /* Get R/W sector size (WORD) */
-      if( 0 > bdev->ioctl((Object)*fat_glue_dev, IOCTL_BLOCK_GETINFO, &blockInfo) )
+      if( 0 > bdev->ioctl((Object)*(fat_device_association_list[drv]), IOCTL_BLOCK_GETINFO, &blockInfo) )
       {
          return RES_ERROR;
       }
@@ -195,17 +196,17 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
    blockDevInfo_t blockInfo;
    blockDevState_t blockDevState;
 
-   if (NULL == fat_glue_dev) {
+   if (NULL == fat_device_association_list[drv]) {
       return RES_PARERR;
    }
 
-   bdev = ooc_get_interface((Object)*fat_glue_dev, BlockDevice);
+   bdev = ooc_get_interface((Object)*(fat_device_association_list[drv]), BlockDevice);
    if(bdev == NULL)
    {
       return RES_ERROR;
    }
 
-   if( 0 > bdev->getState((Object)*fat_glue_dev, &blockDevState) );
+   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
    {
       return RES_ERROR;
    }
@@ -214,16 +215,16 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
       return RES_NOTRDY;
    }
 
-   if( 0 > bdev->ioctl((Object)*fat_glue_dev, IOCTL_BLOCK_GETINFO, &blockInfo) )
+   if( 0 > bdev->ioctl((Object)*(fat_device_association_list[drv]), IOCTL_BLOCK_GETINFO, &blockInfo) )
    {
       return RES_ERROR;
    }
 
-   if( offset != bdev->lseek(((Object)*fat_glue_dev, sector*blockInfo.size, SEEK_SET) )
+   if( offset != bdev->lseek(((Object)*(fat_device_association_list[drv]), sector*blockInfo.size, SEEK_SET) )
    {
       return RES_ERROR;
    }
-   if( nbyte != bdev->read((Object)*fat_glue_dev, buff, count) )
+   if( nbyte != bdev->read((Object)*(fat_device_association_list[drv]), buff, count) )
    {
       return RES_ERROR;
    }
@@ -237,17 +238,17 @@ DSTATUS disk_status(BYTE drv)
    BlockDevice bdev;
    blockDevState_t blockDevState;
 
-   if (NULL == fat_glue_dev) {
+   if (NULL == fat_device_association_list[drv]) {
       return RES_PARERR;
    }
 
-   bdev = ooc_get_interface((Object)*fat_glue_dev, BlockDevice);
+   bdev = ooc_get_interface((Object)*(fat_device_association_list[drv]), BlockDevice);
    if(bdev == NULL)
    {
       return RES_ERROR;
    }
 
-   if( 0 > bdev->getState((Object)*fat_glue_dev, &blockDevState) );
+   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
    {
       return STA_NOINIT;
    }
@@ -266,17 +267,17 @@ DRESULT disk_write(BYTE drv, const BYTE *buff, DWORD sector, BYTE count)
    blockDevInfo_t blockInfo;
    blockDevState_t blockDevState;
 
-   if (NULL == fat_glue_dev) {
+   if (NULL == fat_device_association_list[drv]) {
       return RES_PARERR;
    }
 
-   bdev = ooc_get_interface((Object)*fat_glue_dev, BlockDevice);
+   bdev = ooc_get_interface((Object)*(fat_device_association_list[drv]), BlockDevice);
    if(bdev == NULL)
    {
       return RES_ERROR;
    }
 
-   if( 0 > bdev->getState((Object)*fat_glue_dev, &blockDevState) );
+   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
    {
       return RES_ERROR;
    }
@@ -285,16 +286,16 @@ DRESULT disk_write(BYTE drv, const BYTE *buff, DWORD sector, BYTE count)
       return RES_NOTRDY;
    }
 
-   if( 0 > bdev->ioctl((Object)*fat_glue_dev, IOCTL_BLOCK_GETINFO, &blockInfo) )
+   if( 0 > bdev->ioctl((Object)*(fat_device_association_list[drv]), IOCTL_BLOCK_GETINFO, &blockInfo) )
    {
       return RES_ERROR;
    }
 
-   if( offset != bdev->lseek(((Object)*fat_glue_dev, sector*blockInfo.size, SEEK_SET) )
+   if( offset != bdev->lseek(((Object)*(fat_device_association_list[drv]), sector*blockInfo.size, SEEK_SET) )
    {
       return RES_ERROR;
    }
-   if( nbyte != bdev->write((Object)*fat_glue_dev, buff, count) )
+   if( nbyte != bdev->write((Object)*(fat_device_association_list[drv]), buff, count) )
    {
       return RES_ERROR;
    }

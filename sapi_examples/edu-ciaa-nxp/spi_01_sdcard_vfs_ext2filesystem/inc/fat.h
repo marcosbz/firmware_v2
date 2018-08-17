@@ -114,14 +114,11 @@ typedef struct fat_file_info
 {
    FIL fatfs_fp;
    FILINFO fno;
-   uint32_t            f_size;
 } fat_file_info_t;
 
 typedef struct fat_format_param
 {
    uint32_t partition_size;
-   uint16_t block_size; /* Valid block_size values are 1024, 2048 and 4096 bytes per block */
-   uint8_t block_node_factor; /* blocks/nodes. Default is 4 */
 } fat_format_param_t;
 /*==================[external data declaration]==============================*/
 
