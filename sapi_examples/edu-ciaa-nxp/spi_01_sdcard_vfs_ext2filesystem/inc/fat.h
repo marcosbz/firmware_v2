@@ -65,6 +65,7 @@
 
 #include <stdint.h>
 #include "vfs.h"
+#include "ff.h"
 
 /*==================[macros]=================================================*/
 
@@ -104,6 +105,7 @@
 typedef struct fat_fs_info
 {
    FATFS fatfs_mounthandle;
+   uint8_t fatfs_devnum;
 } fat_fs_info_t;
 
 /** \brief fat file info

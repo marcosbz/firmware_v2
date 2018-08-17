@@ -35,19 +35,25 @@ PROJECT_NAME := $(notdir $(PROJECT))
 
 # Modules needed by the application
 PROJECT_MODULES := modules/$(TARGET)/sapi \
-                   modules/$(TARGET)/fatfs_ssp \
                    modules/$(TARGET)/base \
                    modules/$(TARGET)/board \
                    modules/$(TARGET)/chip \
                    modules/$(TARGET)/ooc \
                    modules/$(TARGET)/tlsf \
+                   modules/$(TARGET)/lpcusblib \
 
 # source files folder
 PROJECT_SRC_FOLDERS := $(PROJECT)/src
 
 # header files folder
-PROJECT_INC_FOLDERS := $(PROJECT)/inc
+PROJECT_INC_FOLDERS := $(PROJECT)/inc \
+                       $(PROJECT)/inc/implement \
+                       $(PROJECT)/inc/fatfs/inc \
 
 # source files
-PROJECT_C_FILES := $(wildcard $(PROJECT)/src/*.c)
+PROJECT_C_FILES := $(wildcard $(PROJECT)/src/*.c) \
+                   $(wildcard $(PROJECT)/src/fatfs/src/*.c)
 PROJECT_ASM_FILES := $(wildcard $(PROJECT)/src/*.S)
+
+# usb host symbol
+SYMBOLS += -DUSB_HOST_ONLY

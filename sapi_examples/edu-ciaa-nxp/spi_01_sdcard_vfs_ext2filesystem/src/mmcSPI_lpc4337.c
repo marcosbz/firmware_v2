@@ -59,6 +59,7 @@
 /*==================[inclusions]=============================================*/
 #include <string.h>
 #include "diskio.h"
+#include "mmc_diskio.h"
 #include "chip.h"
 #include "device.h"
 #include "implement/device_impl_lpc4337.h"
@@ -201,14 +202,14 @@ int mmcSPI_init(MmcSPI self)
    n = 5;
    while(n--)
    {
-      stat = disk_initialize(0);
+      stat = mmc_disk_initialize(0);
       if(0 == (stat & STA_NOINIT)) break;
    }
    if(0 == (stat & STA_NOINIT))
    {
       /* Get device information */
-      if(RES_OK == disk_ioctl(0, GET_SECTOR_SIZE, &(self->block_size)) &&
-         RES_OK == disk_ioctl(0, GET_SECTOR_COUNT, &(self->nsectors)))
+      if(RES_OK == mmc_disk_ioctl(0, GET_SECTOR_SIZE, &(self->block_size)) &&
+         RES_OK == mmc_disk_ioctl(0, GET_SECTOR_COUNT, &(self->nsectors)))
       {
          self->type =  MMC_CARDTYPE_MMC; //Set by default. TODO
          //if(mmcSPI_blockErase(self, 0, self->nsectors - 1) == 0) //FIXME
@@ -253,7 +254,7 @@ int mmcSPI_singleBlockRead(MmcSPI self, uint8_t *readBlock, uint32_t sector)
 
    if(MMC_STATUS_READY == self->status && sector < self->nsectors)
    {
-      if(RES_OK == disk_read(0, readBlock, sector, 1))
+      if(RES_OK == mmc_disk_read(0, readBlock, sector, 1))
       {
          ret = 0;
       }
@@ -272,7 +273,7 @@ int mmcSPI_singleBlockWrite(MmcSPI self, const uint8_t *writeBlock, uint32_t sec
 
    if(MMC_STATUS_READY == self->status && sector < self->nsectors)
    {
-      if(RES_OK == disk_write(0, writeBlock, sector, 1))
+      if(RES_OK == mmc_disk_write(0, writeBlock, sector, 1))
       {
          ret = 0;
       }
@@ -295,7 +296,7 @@ int mmcSPI_blockErase(MmcSPI self, uint32_t start, uint32_t end)
    {
       for(i = start; i <= end; i++)
       {
-         if(RES_OK != disk_write(0, zeroBlock, i, 1))
+         if(RES_OK != mmc_disk_write(0, zeroBlock, i, 1))
          {
             break;
          }
