@@ -430,7 +430,7 @@ static int fat_file_open(file_desc_t *file)
    {
 
    }
-   
+
 
    return ret;
 }
@@ -490,22 +490,14 @@ static int fat_init(void *par)
 
 static int fat_format(filesystem_info_t *fs, void *param)
 {
-   int ret;
+   int ret = -1;
    Device dev;
    BlockDevice bdev;
    blockDevInfo_t blockInfo;
    fat_format_param_t format_parameters;
-
-   fat_superblock_t superblock;
-   fat_gd_t gd_buffer;
-   fat_inode_t node;
+   uint8_t fat_mkfs_workingbuffer[512];
 
    uint16_t i, aux,group_index;
-   uint16_t ngroups, nblocks_gd, inodes_per_group, inodeblocks_per_group,
-            minmetablocks_per_group,  nblocks_last_group, nblocks_group_overhead;
-   uint32_t block_offset, free_blocks_count, free_inodes_count, write_offset;
-   uint32_t group_offset;
-   uint8_t   aux_byte;
 
    dev = fs->device;
    bdev = ooc_get_interface((Object)dev, BlockDevice);
@@ -523,347 +515,37 @@ static int fat_format(filesystem_info_t *fs, void *param)
    if(param == NULL)
    {
       /* Default format setup: 1KB Block and whole device */
-      format_parameters.block_size = 1024;
-      format_parameters.partition_size = blockInfo.num * blockInfo.size / format_parameters.block_size;
-      format_parameters.block_node_factor = FAT_DEFAULT_BLOCKNODE_FACTOR;
+      format_parameters.partition_size = 0;
    }
    else
    {
-      memcpy((void *)&format_parameters, (void *)param, sizeof(fat_format_param_t));
-      if(format_parameters.block_size < FAT_MIN_BLOCKSIZE)
-         format_parameters.block_size = FAT_MIN_BLOCKSIZE;
-      if(format_parameters.block_size > FAT_MAX_BLOCKSIZE)
-         format_parameters.block_size = FAT_MAX_BLOCKSIZE;
-      if(!(is_powerof2(format_parameters.block_size)))
-         return -1;
-      if(!(format_parameters.block_node_factor >= 2 && format_parameters.block_node_factor <= 10))
-         format_parameters.block_node_factor = FAT_DEFAULT_BLOCKNODE_FACTOR;
-      /* Partition size must not exceed device size */
-      if(format_parameters.partition_size * format_parameters.block_size >= blockInfo.num * blockInfo.size)
-         return -1;
+     format_parameters.partition_size = ((fat_format_param_t *)param)->partition_size;
    }
 
-   /* Initialize default fat superblock contents */
-   memset((uint8_t *)&superblock, 0, sizeof(fat_superblock_t));
-
-   for(i = 0, aux = 1024; aux < format_parameters.block_size; i++, aux = 1024 << i);   /* blocksize log2 */
-   superblock.s_log_block_size = i;
-   superblock.s_log_frag_size = superblock.s_log_block_size;
-   superblock.s_first_data_block = (format_parameters.block_size > FAT_SBOFF) ? 0 : 1;  /* First Data Block */
-   superblock.s_blocks_per_group = format_parameters.block_size*8;  /* Number of blocks per group */
-   superblock.s_frags_per_group = superblock.s_blocks_per_group;   /* Number of fragments per group */
-   superblock.s_wtime = 0;             /* Last write time */
-   superblock.s_mnt_count = 0;            /* Current mount count */
-   superblock.s_max_mnt_count = -1;        /* Max mount count */
-   superblock.s_magic = FAT_MAGIC;                /* Magic number */
-   superblock.s_state = 1;                /* File system state. FAT_VALID_FS */
-   superblock.s_errors = 1;               /* Behaviour when detecting errors. FAT_ERRORS_CONTINUE */
-   superblock.s_lastcheck = 0;         /* time of last check */
-   superblock.s_rev_level = 0;         /* Good old rev */
-   superblock.s_first_ino = 11;         /* First non-reserved inode. FAT_GOOD_OLD_FIRST_INO */
-   superblock.s_inode_size = 128;           /* size of inode structure. FAT_GOOD_OLD_INODE_SIZE */
-   superblock.s_block_group_nr = 0;       /* block group # of this superblock */
-   superblock.s_feature_compat = 0x00;    /* compatible feature set */
-   superblock.s_feature_incompat = 0x00;  /* incompatible feature set */
-   superblock.s_feature_ro_compat = 0x00;  /* readonly-compatible feature set */
-   superblock.s_uuid[0] = 0;   /* 128-bit uuid for volume */
-   superblock.s_uuid[1] = 0;
-   superblock.s_uuid[2] = 0;
-   superblock.s_uuid[3] = 0;
-   superblock.s_uuid[4] = 0;
-   superblock.s_uuid[5] = 0;
-   superblock.s_uuid[6] = 0;
-   superblock.s_uuid[7] = 0;
-   superblock.s_uuid[8] = 0;
-   superblock.s_uuid[9] = 0;
-   superblock.s_uuid[10] = 0;
-   superblock.s_uuid[11] = 0;
-   superblock.s_uuid[12] = 0;
-   superblock.s_uuid[13] = 0;
-   superblock.s_uuid[14] = 0;
-   superblock.s_uuid[15] = 0;
-   strcpy((char *) superblock.s_volume_name, "fat");      /* volume name */
-
-   /* Total blocks */
-   superblock.s_blocks_count = format_parameters.partition_size;
-   /* (block/node) factor = 4 */
-   superblock.s_inodes_count = superblock.s_blocks_count / format_parameters.block_node_factor;
-   /* Reserved blocks count */
-   superblock.s_r_blocks_count = 0;
-   /* Number of block groups */
-   ngroups = howmany(superblock.s_blocks_count - superblock.s_first_data_block,
-                     superblock.s_blocks_per_group);
-   /* Number of blocks reserved for the group descriptors in every group */
-   nblocks_gd = howmany(sizeof(fat_gd_t)*ngroups, format_parameters.block_size);
-   /* Number of nodes which fit in a single block */
-   inodes_per_group = superblock.s_inodes_count / ngroups;
-   /* Number of blocks reserved for physical node allocations */
-   inodeblocks_per_group = howmany(superblock.s_inode_size * inodes_per_group, format_parameters.block_size);
-   /* Number of total metadata blocks per group */
-   minmetablocks_per_group = 1 /*Superblock*/ + nblocks_gd + 1 /*Block bitmap*/ +
-                     1 /*Inode bimap*/ + inodeblocks_per_group + 1 /*At least 1 data block*/;
-   if(format_parameters.partition_size <= minmetablocks_per_group)
+   dev = dest_node->fs_info->device;
+   /* Asocio dev a devnum 0, que es especial */
+   if( 0 <= fat_fatfs_associate_dev(&dev, 0) )
    {
-      /* Device size is not enough to hold minimum file system data */
-      return -1;
-   }
-   /* The last group contains generally less blocks than the others. It contains the remaining blocks */
-   nblocks_last_group = superblock.s_blocks_count - superblock.s_first_data_block -
-                        superblock.s_blocks_per_group * (ngroups - 1);
-
-   /* If the last group contains less blocks than the minimum allowed, eliminate the group */
-   if(nblocks_last_group < minmetablocks_per_group)
-   {
-      superblock.s_blocks_count -= nblocks_last_group;
-      ngroups--;
-      nblocks_last_group = superblock.s_blocks_per_group;
-      nblocks_gd = howmany(sizeof(fat_gd_t)*ngroups, format_parameters.block_size);
-      inodes_per_group = superblock.s_inodes_count / ngroups;
-   }
-
-   /* The number of nodes in a group must be multiple of 8 */
-   superblock.s_inodes_per_group = rounddown(inodes_per_group, 8);
-   /* Total node count in disk */
-   superblock.s_inodes_count = inodes_per_group * ngroups;
-   /* Recalculate number of nodes which fit in a single block */
-   inodeblocks_per_group = howmany(superblock.s_inode_size * inodes_per_group, format_parameters.block_size);
-   /* Overhead blocks per group */
-   nblocks_group_overhead = 1/*Superblock*/ + nblocks_gd + 1 /*Blockbitmap*/+ 1 /*Inodebitmap*/+
-                              inodeblocks_per_group;
-
-   free_inodes_count=free_blocks_count=0;
-   for(group_index=0; group_index<ngroups; group_index++)
-   {
-      /*** INODE GROUPS DESCRIPTORS ***/
-      block_offset = superblock.s_first_data_block + superblock.s_blocks_per_group*group_index;
-      block_offset += 1 /*Superblock*/+ nblocks_gd;
-      gd_buffer.block_bitmap = block_offset;
-      block_offset += 1; /*Block bitmap*/
-      gd_buffer.inode_bitmap = block_offset;
-      block_offset += 1; /*Inode table*/
-      gd_buffer.inode_table = block_offset;
-      if(group_index == ngroups-1)
-         gd_buffer.free_blocks_count = nblocks_last_group -
-                                                      nblocks_group_overhead /*Overhead*/;
-      else if(group_index == 0)
-         /* Reserve a block for root entries */
-         gd_buffer.free_blocks_count = superblock.s_blocks_per_group - nblocks_group_overhead - 1;
-      else
-         gd_buffer.free_blocks_count = superblock.s_blocks_per_group - nblocks_group_overhead /*Overhead*/;
-      free_blocks_count += gd_buffer.free_blocks_count;
-      if(group_index == 0)
-         gd_buffer.free_inodes_count = superblock.s_inodes_per_group - FAT_RESERVED_INODES;
-      else
-         gd_buffer.free_inodes_count = superblock.s_inodes_per_group;
-
-      free_inodes_count += gd_buffer.free_inodes_count;
-      gd_buffer.used_dirs_count = (group_index == 0) ? 1 : 0; /* Consider the root dir */
-      /* Write data to every group in the partition */
-      for(i=0, group_offset = superblock.s_first_data_block*format_parameters.block_size; i<ngroups;
-            i++, group_offset += superblock.s_blocks_per_group*format_parameters.block_size)
+      /* TODO: armar fat_path_buffer para mount. Utilizar devnum 0. */
+      if( FR_OK == f_mkfs("0:", FM_ANY, format_parameters.partition_size, fat_mkfs_workingbuffer, 512) )
       {
-         ret = fat_device_buf_write(dev, (uint8_t *)&gd_buffer,
-                                       group_offset + format_parameters.block_size +
-                                       group_index*sizeof(fat_gd_t), sizeof(fat_gd_t));
-         if(ret)
-         {
-            return -1;
-         }
-      }
-
-      /*** BLOCK BITMAP ***/
-      if(group_index == 0)
-      {
-         nblocks_group_overhead += 1; /* Consider the block containing root dir entries */
-      }
-      block_offset = gd_buffer.block_bitmap * format_parameters.block_size;
-      /* Must set non existent blocks as reserved
-       * Must set metadata blocks as reserved
-       */
-      /* Set the first bits representing busy blocks */
-      ret = fat_device_buf_memset(dev, 0xFF, block_offset, nblocks_group_overhead/8);
-      if(ret < 0)
-      {
-         return -1;
-      }
-      /* Clear the last bits representing free blocks */
-      ret = fat_device_buf_memset(dev, 0x00, block_offset + nblocks_group_overhead/8,
-                                    format_parameters.block_size - nblocks_group_overhead/8);
-      if(ret < 0)
-      {
-         return -1;
-      }
-      /* Before this, whole bytes were set or cleared. There is a byte which could not be 0x00 or 0xFF.
-       * Set the bits of this byte individually.
-       */
-      aux_byte = 0;
-      for(i=0; i<(nblocks_group_overhead%8);i++)
-      {
-         setbit(&aux_byte,i);
-      }
-      ret = fat_device_buf_write(dev, (uint8_t *)&aux_byte, block_offset + nblocks_group_overhead/8, 1);
-      if(ret < 0)
-      {
-         return -1;
-      }
-      if(group_index == 0)
-      {
-         nblocks_group_overhead -= 1; /* Consider the block containing root dir entries */
-      }
-
-
-      /*** INODE BITMAP ***/
-
-      /* The root inode is already considered in the reserved inodes */
-      block_offset = gd_buffer.inode_bitmap * format_parameters.block_size;
-      /* Inodes are all free at the beginning. Alloc special nodes later */
-      /* Clear the first bits corresponding to free inodes */
-      ret = fat_device_buf_memset(dev, 0x00, block_offset, superblock.s_inodes_per_group/8);
-      if(ret < 0)
-      {
-         return -1;
-      }
-      /* Set the last bits representing non-existent inodes */
-      //printf("fat_format(): INODE BITMAP: Set bits offset: %d quant: %d\n",
-                        //block_offset + superblock.s_inodes_per_group/8,
-                        //format_parameters.block_size - superblock.s_inodes_per_group/8);
-      ret = fat_device_buf_memset(dev, 0xFF, block_offset + superblock.s_inodes_per_group/8,
-                                    format_parameters.block_size - superblock.s_inodes_per_group/8);
-      if(ret < 0)
-      {
-         return -1;
-      }
-      /* Before this, whole bytes were set or cleared. There is a byte which could not be 0x00 or 0xFF.
-       * Set the bits of this byte individually.
-       */
-      aux_byte = 0xFF;
-      for(i=0; i<(superblock.s_inodes_per_group%8);i++)
-      {
-         clrbit(&aux_byte,i);
-      }
-      ret = fat_device_buf_write(dev, (uint8_t *)&aux_byte, block_offset + superblock.s_inodes_per_group/8, 1);
-      if(ret)
-      {
-         return -1;
-      }
-      if (group_index == 0)
-      {
-         /* mark reserved inodes in first group */
-         ret = fat_device_buf_memset(dev, 0xFF, block_offset, FAT_RESERVED_INODES/8);
-         if(ret)
-         {
-            return -1;
-         }
-         /* Before this, whole bytes were set or cleared. There is a byte which could not be 0x00 or 0xFF.
-          * Set the bits of this byte individually.
-          */
-         aux_byte = 0;
-         for(i=0; i<(FAT_RESERVED_INODES%8);i++)
-         {
-            setbit(&aux_byte,i);
-         }
-         ret = fat_device_buf_write(dev, (uint8_t *)&aux_byte, block_offset + FAT_RESERVED_INODES/8, 1);
-         if(ret)
-         {
-            return -1;
-         }
-      }
-   }
-   /* These values change as new files are created */
-   superblock.s_free_inodes_count = free_inodes_count;
-   superblock.s_free_blocks_count = free_blocks_count;
-   /* write on-memory superblock to all groups */
-   for(group_index=0; group_index<ngroups; group_index++)
-   {
-      group_offset = (superblock.s_first_data_block + superblock.s_blocks_per_group) * format_parameters.block_size * group_index;
-      /* If the block size is 1024, block 0 is boot block, block 1 is superblock. Blocks 1 to 8192 are group 1 blocks
-       * Boot block dont count as group 1 block
-       */
-      /* If the block size is 2048, block 0 contains boot block and superblock.
-       */
-      write_offset = (group_index == 0) ? FAT_SBOFF : group_offset;
-      /* Clear all superblock bytes */
-      ret = fat_device_buf_memset(dev, 0, write_offset, FAT_SBSIZE);
-      if(ret)
-      {
-         return -1;
-      }
-      superblock.s_block_group_nr = group_index;
-      /* Copy superblock to disk */
-      ret = fat_device_buf_write(dev, (uint8_t *)&superblock, write_offset, sizeof(fat_superblock_t));
-      if(ret)
-      {
-         return -1;
+         fat_fatfs_desassociate_dev(0);
+         ret = 0;
       }
    }
 
-   /* Read first group descriptor */
-   ret = fat_device_buf_read(dev, (uint8_t *)&gd_buffer, (superblock.s_first_data_block + 1)*format_parameters.block_size,
-                               sizeof(fat_gd_t));
-   if(ret)
-   {
-      return -1;
-   }
-   /* Clean all reserved inodes */
-   ret = fat_device_buf_memset(dev, 0, gd_buffer.inode_table * format_parameters.block_size,
-                                 superblock.s_inode_size*FAT_RESERVED_INODES);
-   if(ret)
-   {
-      return -1;
-   }
-   /* Create root directory */
-   memset(&node, 0, sizeof(fat_inode_t));
-   node.i_mode = 040755;
-   node.i_uid = node.i_gid = 1000;
-   node.i_size = format_parameters.block_size;
-   node.i_atime = node.i_ctime = node.i_mtime = 0;
-   node.i_dtime = 0;
-   node.i_links_count = 2;
-   node.i_blocks = format_parameters.block_size / 512;
-
-   /* Reserve free block in first group for root directory data */
-   /* The block was already reserved when setting block bitmap bits. Its the first block after overhead blocks */
-   /* This block will be assigned to node.i_block[0] */
-   node.i_block[0] = nblocks_group_overhead;
-
-   /* Fill root inode */
-   ret = fat_device_buf_write(dev, (uint8_t *)&node, gd_buffer.inode_table * format_parameters.block_size +
-                               superblock.s_inode_size, sizeof(fat_inode_t)); /* Second inode in table. ROOT INODE */
-   if(ret)
-   {
-      return -1;
-   }
-
-   /* Create root entry */
-
-   /* Self entry */
-   fat_dir_entry_buffer.inode = 2;
-   fat_dir_entry_buffer.rec_len = 12;
-   fat_dir_entry_buffer.name_len = 1;
-   fat_dir_entry_buffer.file_type = 2;
-   strcpy(fat_dir_entry_buffer.name, ".");
-
-   ret = fat_device_buf_write(dev, (uint8_t *)&fat_dir_entry_buffer, node.i_block[0]*format_parameters.block_size, sizeof(fat_direntry_t)); /* First entry, "." */
-   if(ret)
-   {
-      return -1;
-   }
-
-   /* Parent entry */
-   fat_dir_entry_buffer.inode = 2;
-   fat_dir_entry_buffer.rec_len = format_parameters.block_size - 12;
-   fat_dir_entry_buffer.name_len = 2;
-   fat_dir_entry_buffer.file_type = 2;
-   strcpy(fat_dir_entry_buffer.name, "..");
-
-   ret = fat_device_buf_write(dev, (uint8_t *)&fat_dir_entry_buffer, node.i_block[0]*format_parameters.block_size+12, sizeof(fat_direntry_t)); /* Second entry, ".." */
-   if(ret)
-   {
-      return -1;
-   }
-
-   return 0;
+   return ret;
 }
+
+#if 0
+FRESULT f_mkfs (
+  const TCHAR* path,  /* [IN] Logical drive number */
+  BYTE  opt,          /* [IN] Format options */
+  DWORD au,           /* [IN] Size of the allocation unit */
+  void* work,         /* [-]  Working buffer */
+  UINT len            /* [IN] Size of working buffer */
+);
+#endif
 
 /* Set root info in mountpoint */
 /* Preconditions: dest_node is allocated in vfs */
@@ -928,7 +610,7 @@ int fat_fatfs_associate_dev(Device *dev, uint8_t devnum)
 
    if(devnum < 10)
    {
-      for(i=0; i<10; i++)
+      for(i=1; i<10; i++) /* devnum 0 es especial para format */
       {
          if(NULL == fat_device_association_list[i]) /* Found free devnum */
          {
@@ -1164,12 +846,12 @@ FRESULT scan_files(vnode_t dir_node)
             res = f_open(&(finfo->fatfs_fp), fat_path_buffer, FA_READ | FA_WRITE);
             if( FR_OK == res )
             {
-               
+
             }
             else /* Open failed */
             {
                break;
-            } 
+            }
          }
       }
       f_closedir(&dir);
