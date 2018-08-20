@@ -79,7 +79,7 @@ DSTATUS disk_initialize(BYTE drv)
    {
       return RES_ERROR;
    }
-   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
+   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) )
    {
       return RES_ERROR;
    }
@@ -124,7 +124,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
       BLKDEV_SYNCING
    } blockDevState_t;
    */
-   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
+   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) )
    {
       return RES_ERROR;
    }
@@ -139,7 +139,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
    case CTRL_SYNC:   /* Make sure that no pending write process */
       for(i=0; i<0xFFFFFF; i++)
       {
-         if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
+         if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) )
          {
             return RES_ERROR;
          }
@@ -200,7 +200,7 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
       return RES_ERROR;
    }
 
-   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
+   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) )
    {
       return RES_ERROR;
    }
@@ -242,7 +242,7 @@ DSTATUS disk_status(BYTE drv)
       return RES_ERROR;
    }
 
-   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
+   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) )
    {
       return STA_NOINIT;
    }
@@ -271,7 +271,7 @@ DRESULT disk_write(BYTE drv, const BYTE *buff, DWORD sector, BYTE count)
       return RES_ERROR;
    }
 
-   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
+   if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) )
    {
       return RES_ERROR;
    }
