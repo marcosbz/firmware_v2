@@ -29,21 +29,17 @@
  * this code.
  */
 
-#include "fsusb_cfg.h"
 #include "board.h"
 #include "chip.h"
+#include "ff.h"
+#include "diskio.h"
+#include "device.h"
+#include "blockDevice.h"
 
 /*****************************************************************************
  * Private types/enumerations/variables
  ****************************************************************************/
 
-/* Disk Status */
-static volatile DSTATUS Stat = STA_NOINIT;
-
-/* 100Hz decrement timer stopped at zero (disk_timerproc()) */
-static volatile WORD Timer2;
-
-static DISK_HANDLE_T *hDisk;
 
 /*****************************************************************************
  * Public types/enumerations/variables
@@ -102,6 +98,7 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
    BlockDevice bdev;
    blockDevInfo_t blockInfo;
    blockDevState_t blockDevState;
+   uint32_t i;
 
    if (NULL == fat_device_association_list[drv]) {
       return RES_PARERR;
@@ -140,9 +137,6 @@ DRESULT disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
 
    switch (ctrl) {
    case CTRL_SYNC:   /* Make sure that no pending write process */
-      if (FSUSB_DiskReadyWait(hDisk, 50)) {
-         res = RES_OK;
-      }
       for(i=0; i<0xFFFFFF; i++)
       {
          if( 0 > bdev->getState((Object)*(fat_device_association_list[drv]), &blockDevState) );
@@ -220,11 +214,11 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
       return RES_ERROR;
    }
 
-   if( offset != bdev->lseek(((Object)*(fat_device_association_list[drv]), sector*blockInfo.size, SEEK_SET) )
+   if( sector*blockInfo.size != bdev->lseek( (Object)*(fat_device_association_list[drv]), sector*(blockInfo.size), SEEK_SET) )
    {
       return RES_ERROR;
    }
-   if( nbyte != bdev->read((Object)*(fat_device_association_list[drv]), buff, count) )
+   if( count != bdev->read((Object)*(fat_device_association_list[drv]), buff, count) )
    {
       return RES_ERROR;
    }
@@ -291,11 +285,11 @@ DRESULT disk_write(BYTE drv, const BYTE *buff, DWORD sector, BYTE count)
       return RES_ERROR;
    }
 
-   if( offset != bdev->lseek(((Object)*(fat_device_association_list[drv]), sector*blockInfo.size, SEEK_SET) )
+   if( sector*blockInfo.size != bdev->lseek( (Object)*(fat_device_association_list[drv]), sector*blockInfo.size, SEEK_SET) )
    {
       return RES_ERROR;
    }
-   if( nbyte != bdev->write((Object)*(fat_device_association_list[drv]), buff, count) )
+   if( count != bdev->write((Object)*(fat_device_association_list[drv]), buff, count) )
    {
       return RES_ERROR;
    }

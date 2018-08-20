@@ -43,7 +43,9 @@ PROJECT_MODULES := modules/$(TARGET)/sapi \
                    modules/$(TARGET)/lpcusblib \
 
 # source files folder
-PROJECT_SRC_FOLDERS := $(PROJECT)/src
+PROJECT_SRC_FOLDERS := $(PROJECT)/src \
+                       $(PROJECT)/src/fatfs/src
+
 
 # header files folder
 PROJECT_INC_FOLDERS := $(PROJECT)/inc \

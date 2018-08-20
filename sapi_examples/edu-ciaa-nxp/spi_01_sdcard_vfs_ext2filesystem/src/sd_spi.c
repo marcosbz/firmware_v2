@@ -43,6 +43,7 @@
 #include <string.h>    /* <= string header */
 #include "test_fs.h"  /* <= own header */
 #include "ext2.h"
+#include "fat.h"
 #include "ooc.h"
 #include "device.h"
 #include "mmcSPI.h"
@@ -64,6 +65,7 @@ uint8_t buffer[TEST_BUFFER_SIZE];
  *
  */
 extern filesystem_driver_t ext2_driver;
+extern filesystem_driver_t fat_driver;
 
 /*==================[declaraciones de funciones internas]====================*/
 
@@ -119,7 +121,7 @@ void task(void)
    file_desc_t *file0, *file1, *file2, *file3;
 
    uint8_t buffer[TEST_BUFFER_SIZE];
-   ext2_format_param_t format_parameters;
+   fat_format_param_t format_parameters;
 
    int32_t ret;
    uint32_t lret;
@@ -156,16 +158,16 @@ void task(void)
    //while(1);
 
    /* Create file system object with device and fs driver */
-   //ret = filesystem_create(&fs, (Device) mmc0, &ext2_driver); if(ret < 0) while(1);
-   ret = filesystem_create(&fs, (Device) usb0, &ext2_driver); if(ret < 0) while(1);
+   //ret = filesystem_create(&fs, (Device) mmc0, &fat_driver); if(ret < 0) while(1);
+   ret = filesystem_create(&fs, (Device) usb0, &fat_driver); if(ret < 0) while(1);
 
    /* format */
-   /* Set ext2 format parameters */
-   format_parameters.partition_size = 10*1024;
-   format_parameters.block_size = 1024;
-   format_parameters.block_node_factor = 4;
+   /* Set fat format parameters */
+   //format_parameters.partition_size = 10*1024;
+   //format_parameters.block_size = 1024;
+   //format_parameters.block_node_factor = 4;
 
-   ret = vfs_format(&fs, (void *)&format_parameters);
+   ret = vfs_format(&fs, NULL);
    if(0 == ret)
    {
       // Turn ON LEDG if the write operation was successful
@@ -183,29 +185,29 @@ void task(void)
 
    //ASSERT_SEQ(2);
 
-   ret = vfs_mount("/mount/ext2", &fs); if(ret < 0) while(1);
+   ret = vfs_mount("/mount/fat", &fs); if(ret < 0) while(1);
 
    //ASSERT_SEQ(3);
 
-   ret = vfs_mkdir("/mount/ext2/dir0", 0); if(ret < 0) while(1);
-   ret = vfs_mkdir("/mount/ext2/dir1", 0); if(ret < 0) while(1);
-   ret = vfs_mkdir("/mount/ext2/dir2", 0); if(ret < 0) while(1);
-   ret = vfs_mkdir("/mount/ext2/dir2/dir3", 0); if(ret < 0) while(1);
+   ret = vfs_mkdir("/mount/fat/dir0", 0); if(ret < 0) while(1);
+   ret = vfs_mkdir("/mount/fat/dir1", 0); if(ret < 0) while(1);
+   ret = vfs_mkdir("/mount/fat/dir2", 0); if(ret < 0) while(1);
+   ret = vfs_mkdir("/mount/fat/dir2/dir3", 0); if(ret < 0) while(1);
 
    //ASSERT_SEQ(4);
    /* Show actual vfs tree */
    //ret=vfs_print_tree(); if(ret < 0) while(1);
 
    //ASSERT_SEQ(5);
-   /* Fixme: Duplicated file in ext2. Error not handled */
-   ret = vfs_open("/mount/ext2/file0", &file0, VFS_O_CREAT); if(ret < 0) while(1);
-   ret = vfs_open("/mount/ext2/file1", &file1, VFS_O_CREAT); if(ret < 0) while(1);
+   /* Fixme: Duplicated file in FAT. Error not handled */
+   ret = vfs_open("/mount/fat/file0", &file0, VFS_O_CREAT); if(ret < 0) while(1);
+   ret = vfs_open("/mount/fat/file1", &file1, VFS_O_CREAT); if(ret < 0) while(1);
    //ret=vfs_print_tree(); if(ret < 0) while(1);
 
    //ASSERT_SEQ(6);
 
-   ret = vfs_open("/mount/ext2/dir2/file2", &file2, VFS_O_CREAT); if(ret < 0) while(1);
-   ret = vfs_open("/mount/ext2/dir2/file3", &file3, VFS_O_CREAT); if(ret < 0) while(1);
+   ret = vfs_open("/mount/fat/dir2/file2", &file2, VFS_O_CREAT); if(ret < 0) while(1);
+   ret = vfs_open("/mount/fat/dir2/file3", &file3, VFS_O_CREAT); if(ret < 0) while(1);
    ret = vfs_close(&file0); if(ret < 0) while(1);
    ret = vfs_close(&file1); if(ret < 0) while(1);
    ret = vfs_close(&file2); if(ret < 0) while(1);
@@ -213,11 +215,11 @@ void task(void)
 
    //ASSERT_SEQ(7);
 
-   ret = vfs_open("/mount/ext2/file0", &file0, 0); if(ret < 0) while(1);
+   ret = vfs_open("/mount/fat/file0", &file0, 0); if(ret < 0) while(1);
    test_fill_buffer(buffer, TEST_BUFFER_SIZE);
    lret = vfs_write(&file0, buffer, TEST_BUFFER_SIZE); if(lret < 0) while(1);
    ret = vfs_close(&file0); if(ret < 0) while(1);
-   ret = vfs_open("/mount/ext2/file0", &file0, 0); if(ret < 0) while(1);
+   ret = vfs_open("/mount/fat/file0", &file0, 0); if(ret < 0) while(1);
    memset(buffer, 0, TEST_BUFFER_SIZE);
    lret = vfs_read(&file0, buffer, TEST_BUFFER_SIZE); if(lret != TEST_BUFFER_SIZE) while(1);
    ret = test_check_buffer(buffer, TEST_BUFFER_SIZE); if(ret < 0) while(1);
@@ -227,16 +229,16 @@ void task(void)
 
    //ret=vfs_print_tree(); if(ret < 0) while(1);
    ret = vfs_close(&file0); if(ret < 0) while(1);
-   ret = vfs_unlink("/mount/ext2/dir2/file2"); if(ret < 0) while(1);
-   ret = vfs_unlink("/mount/ext2/dir2/file3"); if(ret < 0) while(1);
-   ret = vfs_open("/mount/ext2/dir2/file4", &file0, VFS_O_CREAT); if(ret < 0) while(1);
-   ret = vfs_open("/mount/ext2/dir2/file5", &file1, VFS_O_CREAT); if(ret < 0) while(1);
+   ret = vfs_unlink("/mount/fat/dir2/file2"); if(ret < 0) while(1);
+   ret = vfs_unlink("/mount/fat/dir2/file3"); if(ret < 0) while(1);
+   ret = vfs_open("/mount/fat/dir2/file4", &file0, VFS_O_CREAT); if(ret < 0) while(1);
+   ret = vfs_open("/mount/fat/dir2/file5", &file1, VFS_O_CREAT); if(ret < 0) while(1);
    ret = vfs_close(&file1); if(ret < 0) while(1);
    //ret=vfs_print_tree(); if(ret < 0) while(1);
 
    //ASSERT_SEQ(9);
 
-   ret = vfs_open("/mount/ext2/dir2/file5", &file3, VFS_O_CREAT); if(ret < 0) while(1);
+   ret = vfs_open("/mount/fat/dir2/file5", &file3, VFS_O_CREAT); if(ret < 0) while(1);
    test_fill_buffer(buffer, TEST_BUFFER_SIZE);
    lret = vfs_write(&file3, buffer, TEST_BUFFER_SIZE); if(lret != TEST_BUFFER_SIZE) while(1);
    memset(buffer, 0, TEST_BUFFER_SIZE);
@@ -282,7 +284,7 @@ static int test_check_buffer(uint8_t *buffer, uint16_t size)
 
 // FUNCION que se ejecuta cada vezque ocurre un Tick
 bool_t diskTickHook( void *ptr ){
-   disk_timerproc();   // Disk timer process
+   mmc_disk_timerproc();   // Disk timer process
    return 1;
 }
 

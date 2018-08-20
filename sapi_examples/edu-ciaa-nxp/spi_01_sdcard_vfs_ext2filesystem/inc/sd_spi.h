@@ -50,7 +50,7 @@ extern "C" {
 
 /*==================[external functions declaration]=========================*/
 
-void disk_timerproc(void);
+void mmc_disk_timerproc(void);
 
 int main(void);
 

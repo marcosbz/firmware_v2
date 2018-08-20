@@ -5197,7 +5197,7 @@ FRESULT f_forward (
 #endif /* _USE_FORWARD */
 
 
-
+//#define _USE_MKFS 1
 #if _USE_MKFS && !_FS_READONLY
 /*-----------------------------------------------------------------------*/
 /* Create FAT file system on the logical drive                           */
