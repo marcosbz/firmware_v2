@@ -147,7 +147,7 @@ static void StorageUSB_constructor( StorageUSB self, const void *params )
    storageUSB_constructor_params_t *storageusb_params;
    assert( ooc_isInitialized( StorageUSB ) );
    chain_constructor( StorageUSB, self, NULL );
-   storageusb_params = (storageUSB_constructor_params_t *)params;	
+   storageusb_params = (storageUSB_constructor_params_t *)params;
    if(storageusb_params != NULL)
    {
       /* TODO */
@@ -401,7 +401,7 @@ static ssize_t storageUSB_write(StorageUSB self, uint8_t const * const buf, size
    }
    if(0 == bytes_left)
    {
-      
+
       ret = i;
       self->position += i;
    }
@@ -476,7 +476,11 @@ static int storageUSB_disconnect(StorageUSB self)
 static int storageUSB_getState(StorageUSB self, blockDevState_t *state)
 {
    assert(ooc_isInstanceOf(self, StorageUSB));
-   return self->status;
+	 /* TODO: Should specify specific state, but quick fix now */
+	 *state = BLKDEV_UNINIT;
+	 if(USB_STATUS_READY == self->status)
+	    *state = BLKDEV_READY;
+   return 0;
 }
 
 static int storageUSB_getInfo(StorageUSB self, blockDevInfo_t *info)

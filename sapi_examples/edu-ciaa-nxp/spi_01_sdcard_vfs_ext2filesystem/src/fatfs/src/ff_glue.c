@@ -218,7 +218,7 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
    {
       return RES_ERROR;
    }
-   if( count != bdev->read((Object)*(fat_device_association_list[drv]), buff, count) )
+   if( count != bdev->read((Object)*(fat_device_association_list[drv]), buff, count*(blockInfo.size)) )
    {
       return RES_ERROR;
    }
@@ -289,7 +289,7 @@ DRESULT disk_write(BYTE drv, const BYTE *buff, DWORD sector, BYTE count)
    {
       return RES_ERROR;
    }
-   if( count != bdev->write((Object)*(fat_device_association_list[drv]), buff, count) )
+   if( count*(blockInfo.size) != bdev->write((Object)*(fat_device_association_list[drv]), buff, count*(blockInfo.size)) )
    {
       return RES_ERROR;
    }
