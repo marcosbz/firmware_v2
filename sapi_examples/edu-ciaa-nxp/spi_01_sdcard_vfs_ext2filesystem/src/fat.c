@@ -470,10 +470,50 @@ int fat_fatfs_desassociate_dev(uint8_t devnum)
    return ret;
 }
 
+#if 0
+ret = -1;
+if(node_is_not_root(node))
+{
+   if( 0 == print_path(node->parent) )
+   {
+      ret = 0
+   }
+}
+if(0 == ret) /* check path buffer not full */
+{
+   ret = -1;
+   if(node->name_size + current_path_size >= PATH_MAX_SIZE)
+   {
+      sprintf(buffer, "...",...);
+      ret = 0;
+   }
+   else
+   {
+
+   }
+}
+return ret;
+#endif
 
 static int fat_create_node(vnode_t *parent_node, vnode_t *child_node)
 {
-   int ret = -1;
+  int ret = -1;
+
+  /* Node creation depends on the file type. A directory needs to have 2 default directories after creation */
+  if(VFS_FTDIR == child_node->f_info.type)
+  {
+     ret = fat_create_directory_file(parent_node, child_node);
+     ret = 0;
+  }
+  else if(VFS_FTREG == child_node->f_info.type)
+  {
+     ret = fat_create_regular_file(parent_node,child_node);
+     ret = 0;
+  }
+  else
+  {
+
+  }
 
    return ret;
 }
