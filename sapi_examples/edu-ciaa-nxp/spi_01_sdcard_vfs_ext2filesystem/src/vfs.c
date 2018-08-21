@@ -90,29 +90,17 @@ FIXME:
 
 /*==================[internal functions declaration]=========================*/
 
-#if 0
-/** \brief Auxiliary recursive function of vfs_get_mntpt_path()
- **
- **
- **
- ** \param[in] node node whose path is to be found
- ** \param[out] path path string returned
- ** \param[out] len_p pointer to the path size variable
- ** \return -1 if an error occurs, in other case 0
- **/
-static int vfs_get_mntpt_path_rec(vnode_t *node, char *path, uint16_t *len_p);
-
-/** \brief get the path relative to the mountpoint
+/** \brief Auxiliary recursive function of print_relative_path()
  **
  **
  **
  ** \param[in] node node whose mount point path is to be found
- ** \param[out] path string which will contain the mountpoint path
- ** \param[out] len_p size of path string
+ ** \param[in/out] path string which will contain the mountpoint path
+ ** \param[in] max_path_size max size of path string
+ ** \param[in] current_path_size_p internal use, should pass a pointer to a zeroed variable
  ** \return -1 if an error occurs, in other case 0
  **/
-static int vfs_get_mntpt_path(vnode_t *node, char *path, uint16_t *len_p);
-#endif
+static int print_relative_path_rec(vnode_t *node, char *path, uint16_t max_path_size, uint16_t *current_path_size_p);
 
 /** \brief alloc memory for new node and initialize contents
  **
@@ -261,35 +249,48 @@ static void assert_msg(int cond, char* msg, char * file, int line)
    }
 }
 
-#if 0
-static int vfs_get_mntpt_path_rec(vnode_t *node, char *path, uint16_t *len_p)
+int print_relative_path(vnode_t *node, char *path, uint16_t max_path_size)
 {
-   uint16_t name_len;
-   int ret;
-   if(false == node->f_info.is_mount_dir)
-   {
-      ret = vfs_get_mntpt_path_rec(node->parent_node, path, len_p);
-      if(ret)
-      {
-         return -1;
-      }
-   }
-   name_len = strlen(node->f_info.file_name);
-   if(*len_p + name_len > FS_PATH_MAX-1)
-      return -1;
-   strcpy((char *)path+(*len_p), node->f_info.file_name);
-   *len_p += strlen(node->f_info.file_name);
-   return 0;
+   uint16_t aux_path_size = 0;
+
+   return print_relative_path_rec(node, path, max_path_size, &aux_path_size);
 }
 
-static int vfs_get_mntpt_path(vnode_t *node, char *path, uint16_t *len_p)
+static int print_relative_path_rec(vnode_t *node, char *path, uint16_t max_path_size, uint16_t *current_path_size_p)
 {
-   int ret;
-   *len_p = 0;
-   ret = vfs_get_mntpt_path_rec(node, path, len_p);
+   int ret = -1;
+
+   if(NULL == node->parent_node)
+   {
+      /* There was no mountpoint. This should never happen. Error */
+   }
+   else if(true == node->f_info.is_mount_dir)
+   {
+      /* Root of the mountpoint, first element of path */
+      ret = 0;
+   }
+   else
+   {
+      if(0 == print_relative_path_rec(node->parent_node, path, max_path_size, current_path_size_p)) /* check path buffer not full */
+      {
+         if(node->f_info.file_namlen + *current_path_size_p + 1 <= max_path_size)
+         {
+            path[*current_path_size_p] = '/';
+            *current_path_size_p += 1;
+            memcpy(path + *current_path_size_p, node->f_info.file_name,  node->f_info.file_namlen);
+            *current_path_size_p += node->f_info.file_namlen;
+            path[*current_path_size_p] = '\0';
+            ret = 0;
+         }
+         else
+         {
+            /* Not enough space to handle path. Error */
+         }
+      }
+   }
+
    return ret;
 }
-#endif
 
 static vnode_t *vfs_node_alloc(const char *name, size_t name_len)
 {

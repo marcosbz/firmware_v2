@@ -508,6 +508,18 @@ extern ssize_t vfs_write(file_desc_t **file, void *buf, size_t nbytes);
  **          calling other of this function using the same file handler.
  **/
 extern ssize_t vfs_lseek(file_desc_t **file, ssize_t offset, int whence);
+
+/** \brief get the path relative to the mountpoint
+ **
+ **
+ **
+ ** \param[in] node node whose mount point path is to be found
+ ** \param[in/out] path string which will contain the mountpoint path
+ ** \param[in] max_path_size max size of path string
+ ** \return -1 if an error occurs, in other case 0
+ **/
+int print_relative_path(vnode_t *node, char *path, uint16_t max_path_size);
+
 /** @} doxygen end group definition */
 /** @} doxygen end group definition */
 /** @} doxygen end group definition */

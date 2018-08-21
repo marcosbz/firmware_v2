@@ -470,50 +470,41 @@ int fat_fatfs_desassociate_dev(uint8_t devnum)
    return ret;
 }
 
-#if 0
-ret = -1;
-if(node_is_not_root(node))
+/*
+if( 0 == print_path(node, fat_path_buffer, FAT_PATH_BUFFER_SIZE) )
 {
-   if( 0 == print_path(node->parent) )
-   {
-      ret = 0
-   }
+
 }
-if(0 == ret) /* check path buffer not full */
+*/
+
+static int fat_create_node(vnode_t *parent_node, vnode_t *child_node)
 {
-   ret = -1;
-   if(node->name_size + current_path_size >= PATH_MAX_SIZE)
+   int ret = -1;
+   fat_fs_info_t *fsinfo;
+
+   fsinfo = child_node->fs_info->down_layer_info;
+
+   fat_path_buffer[0] = fsinfo->fatfs_devnum + '0';
+   fat_path_buffer[1] = ':'; fat_path_buffer[2] = '\0';
+
+   if(VFS_FTDIR == child_node->f_info.type)
    {
-      sprintf(buffer, "...",...);
-      ret = 0;
+      if( 0 == print_relative_path(child_node, fat_path_buffer+2, FAT_PATH_BUFFER_SIZE-2) )
+      {
+         if( FR_OK == f_mkdir((TCHAR*)fat_path_buffer) )
+         {
+            ret = 0;
+         }
+      }
+   }
+   else if(VFS_FTREG == child_node->f_info.type)
+   {
+
    }
    else
    {
 
    }
-}
-return ret;
-#endif
-
-static int fat_create_node(vnode_t *parent_node, vnode_t *child_node)
-{
-  int ret = -1;
-
-  /* Node creation depends on the file type. A directory needs to have 2 default directories after creation */
-  if(VFS_FTDIR == child_node->f_info.type)
-  {
-     ret = fat_create_directory_file(parent_node, child_node);
-     ret = 0;
-  }
-  else if(VFS_FTREG == child_node->f_info.type)
-  {
-     ret = fat_create_regular_file(parent_node,child_node);
-     ret = 0;
-  }
-  else
-  {
-
-  }
 
    return ret;
 }
