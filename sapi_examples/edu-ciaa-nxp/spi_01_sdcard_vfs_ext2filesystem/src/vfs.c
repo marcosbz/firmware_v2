@@ -1199,14 +1199,14 @@ extern int vfs_unlink(const char *path)
    return 0;
 }
 
-extern int filesystem_create(filesystem_info_t **fs, Device dev, filesystem_driver_t *drv)
+extern int filesystem_create(filesystem_info_t **fs, Device *dev, filesystem_driver_t *drv)
 {
    int ret = -1;
 
    if(NULL != ((*fs) = (filesystem_info_t *) tlsf_malloc(fs_mem_handle, sizeof(filesystem_info_t))))
    {
       (*fs)->drv = drv;
-      (*fs)->device = dev;
+      (*fs)->device = *dev;
       (*fs)->down_layer_info = NULL;
       (*fs)->ref_count = 0;
       ret = 0;

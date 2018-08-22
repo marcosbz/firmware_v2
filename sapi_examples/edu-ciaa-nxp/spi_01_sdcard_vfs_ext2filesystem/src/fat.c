@@ -245,7 +245,7 @@ filesystem_driver_t fat_driver =
 };
 
 /* Used in ff_glue.c */
-Device *fat_device_association_list[10] = {0};
+Device fat_device_association_list[10] = {0};
 
 /*==================[internal functions definition]==========================*/
 
@@ -428,7 +428,7 @@ int fat_fatfs_associate_dev(Device *dev, uint8_t *devnum)
    {
       if(NULL == fat_device_association_list[i]) /* Found free devnum */
       {
-         fat_device_association_list[i] = dev;
+         fat_device_association_list[i] = *dev;
          break;
       }
    }
@@ -449,7 +449,7 @@ int fat_fatfs_associate_dev_select(Device *dev, uint8_t devnum)
    {
       if(NULL == fat_device_association_list[devnum])
       {
-         fat_device_association_list[devnum] = dev;
+         fat_device_association_list[devnum] = *dev;
          ret = 0;
       }
    }

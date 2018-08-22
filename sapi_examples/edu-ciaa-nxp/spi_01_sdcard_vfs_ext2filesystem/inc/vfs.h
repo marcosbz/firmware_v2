@@ -309,13 +309,13 @@ extern vnode_t *vfs_create_child(vnode_t *parent, const char *name, size_t namel
  **
  ** Dynamically alloc a new filesystem object given the device and the fs driver functions.
  **
- ** \param[in] dev device of the filesystem
+ ** \param[in] dev pointer to device of the filesystem
  ** \param[in] drv filesystem driver function collection
  ** \param[out] fs pointer to the new filesystem
  ** \return 0 if success, else -1
  **
  **/
-extern int filesystem_create(filesystem_info_t **fs, Device dev, filesystem_driver_t *drv);
+extern int filesystem_create(filesystem_info_t **fs, Device *dev, filesystem_driver_t *drv);
 
 /** \brief Unlink a node and delete it from vfs
  **

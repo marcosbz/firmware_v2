@@ -158,8 +158,8 @@ void task(void)
    //while(1);
 
    /* Create file system object with device and fs driver */
-   //ret = filesystem_create(&fs, (Device) mmc0, &fat_driver); if(ret < 0) while(1);
-   ret = filesystem_create(&fs, (Device) usb0, &fat_driver); if(ret < 0) while(1);
+   //ret = filesystem_create(&fs, (Device *) &mmc0, &fat_driver); if(ret < 0) while(1);
+   ret = filesystem_create(&fs, (Device *) &usb0, &fat_driver); if(ret < 0) while(1);
 
    /* format */
    /* Set fat format parameters */
