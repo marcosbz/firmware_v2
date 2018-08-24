@@ -481,31 +481,60 @@ static int fat_create_node(vnode_t *parent_node, vnode_t *child_node)
 {
    int ret = -1;
    fat_fs_info_t *fsinfo;
+   fat_file_info_t *finfo;
 
    fsinfo = child_node->fs_info->down_layer_info;
+   finfo = child_node->f_info.down_layer_info;
 
-   fat_path_buffer[0] = fsinfo->fatfs_devnum + '0';
-   fat_path_buffer[1] = ':'; fat_path_buffer[2] = '\0';
-
-   if(VFS_FTDIR == child_node->f_info.type)
+   child_node->f_info.down_layer_info = tlsf_malloc(fs_mem_handle, sizeof(fat_file_info_t));
+   if(NULL != child_node->f_info.down_layer_info)
    {
-      if( 0 == print_relative_path(child_node, fat_path_buffer+2, FAT_PATH_BUFFER_SIZE-2) )
+      finfo = (fat_file_info_t *) child_node->f_info.down_layer_info;
+      memset((void *)finfo, 0, sizeof(fat_file_info_t));
+
+      fat_path_buffer[0] = fsinfo->fatfs_devnum + '0';
+      fat_path_buffer[1] = ':'; fat_path_buffer[2] = '\0';
+
+      if(VFS_FTDIR == child_node->f_info.type)
       {
-         if( FR_OK == f_mkdir((TCHAR*)fat_path_buffer) )
+         if( 0 == print_relative_path(child_node, fat_path_buffer+2, FAT_PATH_BUFFER_SIZE-2) )
          {
-            ret = 0;
+            if( FR_OK == f_mkdir((TCHAR*)fat_path_buffer) )
+            {
+               if( FR_OK == f_stat((TCHAR*)fat_path_buffer, &(finfo->fno)) )
+               {
+                  ret = 0;
+               }
+            }
          }
       }
+      else if(VFS_FTREG == child_node->f_info.type)
+      {
+         if( 0 == print_relative_path(child_node, fat_path_buffer+2, FAT_PATH_BUFFER_SIZE-2) )
+         {
+            if( FR_OK == f_open(&(finfo->fatfs_fp), (TCHAR*)fat_path_buffer, FA_CREATE_ALWAYS | FA_READ | FA_WRITE) )
+            {
+               if( FR_OK == f_stat((TCHAR*)fat_path_buffer, &(finfo->fno)) )
+               {
+                  ret = 0;
+               }
+            }
+         }
+      }
+      else
+      {
+
+      }
    }
-   else if(VFS_FTREG == child_node->f_info.type)
+   else /* tlsf_malloc() failed */
    {
 
    }
-   else
+   if(0 > ret)
    {
-
+      tlsf_free(fs_mem_handle, (void *)child_node->f_info.down_layer_info);
+      child_node->f_info.down_layer_info = NULL;
    }
-
    return ret;
 }
 
@@ -513,8 +542,47 @@ static int fat_create_node(vnode_t *parent_node, vnode_t *child_node)
 static int fat_delete_node(vnode_t *parent_node, vnode_t *child_node)
 {
    int ret = -1;
+   fat_fs_info_t *fsinfo;
+   fat_file_info_t *finfo;
+
+   fsinfo = child_node->fs_info->down_layer_info;
+   finfo = child_node->f_info.down_layer_info;
+
+   fat_path_buffer[0] = fsinfo->fatfs_devnum + '0';
+   fat_path_buffer[1] = ':'; fat_path_buffer[2] = '\0';
+
+   if( 0 == print_relative_path(child_node, fat_path_buffer+2, FAT_PATH_BUFFER_SIZE-2) )
+   {
+      if( VFS_FTREG == child_node->f_info.type ) /* File is regular so it was open */
+      {
+         if( FR_OK == f_close(&(finfo->fatfs_fp)) ) /* Close file before removal */
+         {
+            if( FR_OK == f_unlink((TCHAR*)fat_path_buffer) )
+            {
+               ret = 0;
+            }
+         }
+      }
+      else /* File is dir so it was not open */
+      {
+         if( FR_OK == f_unlink((TCHAR*)fat_path_buffer) ) /* Just remove dir */
+         {
+            ret = 0;
+         }
+      }
+      if(0 == ret)
+      {
+         tlsf_free(fs_mem_handle, (void *)child_node->f_info.down_layer_info);
+         child_node->f_info.down_layer_info = NULL;
+      }
+   }
+   else /* print_relative_path() failed */
+   {
+
+   }
 
    return ret;
+
 }
 
 static int fat_truncate(file_desc_t *desc, size_t length)

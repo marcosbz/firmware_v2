@@ -84,7 +84,7 @@ FIXME:
 #define ASSERT_MSG(cond, msg) assert_msg((cond), (msg), __FILE__, __LINE__)
 
 /* Define 8K arena for FS */
-#define FS_ARENA_MEMORY (8 * 1024)
+#define FS_ARENA_MEMORY (16 * 1024)
 
 /*==================[internal data declaration]==============================*/
 

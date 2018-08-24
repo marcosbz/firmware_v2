@@ -194,7 +194,6 @@ void task(void)
    ret = vfs_mkdir("/mount/fat/dir2", 0); if(ret < 0) while(1);
    ret = vfs_mkdir("/mount/fat/dir2/dir3", 0); if(ret < 0) while(1);
 
-   while(1);
    //ASSERT_SEQ(4);
    /* Show actual vfs tree */
    //ret=vfs_print_tree(); if(ret < 0) while(1);
