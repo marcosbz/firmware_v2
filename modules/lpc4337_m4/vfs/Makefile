@@ -1,5 +1,4 @@
-# Copyright 2016, Pablo Ridolfi
-# Copyright 2016, Eric Pernia
+# Copyright 2018, Marcos Ziegler
 # All rights reserved.
 #
 # This file is part of Workspace.
@@ -30,31 +29,17 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# application name
-PROJECT_NAME := $(notdir $(PROJECT))
+vfs_PATH := modules/lpc4337_m4/vfs
 
-# Modules needed by the application
-PROJECT_MODULES := modules/$(TARGET)/sapi \
-                   modules/$(TARGET)/base \
-                   modules/$(TARGET)/board \
-                   modules/$(TARGET)/chip \
-                   modules/$(TARGET)/ooc \
-                   modules/$(TARGET)/tlsf \
-                   modules/$(TARGET)/vfs \
-                   modules/$(TARGET)/lpcusblib \
+vfs_SRC_FILES += $(wildcard $(vfs_PATH)/src/*.c) \
+                 $(wildcard $(vfs_PATH)/src/fatfs/src/*.c)
 
-# source files folder
-PROJECT_SRC_FOLDERS := $(PROJECT)/src
+vfs_SRC_FOLDERS += modules/lpc4337_m4/vfs/src \
+                   modules/lpc4337_m4/vfs/src/fatfs/src
 
-# header files folder
-PROJECT_INC_FOLDERS := $(PROJECT)/inc
-
-# source files
-PROJECT_C_FILES := $(wildcard $(PROJECT)/src/*.c)
-PROJECT_ASM_FILES := $(wildcard $(PROJECT)/src/*.S)
+vfs_INC_FOLDERS += modules/lpc4337_m4/vfs/inc \
+                   modules/lpc4337_m4/vfs/inc/implement \
+                   modules/lpc4337_m4/vfs/inc/fatfs/inc
 
 # usb host symbol
 SYMBOLS += -DUSB_HOST_ONLY
-
-# standard libraries
-EXTERN_LIBS += c rdimon
