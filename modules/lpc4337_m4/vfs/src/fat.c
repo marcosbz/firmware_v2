@@ -689,7 +689,10 @@ static size_t fat_file_write(file_desc_t *desc, void *buf, size_t size)
    {
       if( FR_OK == f_write(&(finfo->fatfs_fp), buf, size, (UINT*)&write_size) )
       {
-         desc->cursor += write_size;
+         if(FR_OK == f_sync(&(finfo->fatfs_fp)) )
+         {
+            desc->cursor += write_size;
+         }
       }
       else /* Error in f_write */
       {
