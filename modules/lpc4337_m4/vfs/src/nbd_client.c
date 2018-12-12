@@ -62,6 +62,10 @@ static int nbd_disconnect(Nbd self);
 static int nbd_getState(Nbd self, blockDevState_t *state);
 static int nbd_getInfo(Nbd self, blockDevInfo_t *info);
 /*==================[internal data definition]===============================*/
+
+nbd_simple_reply_magic
+nbd_request_magic
+
 /*==================[external data definition]===============================*/
 /** \brief Allocating the class description table and the vtable
 */
