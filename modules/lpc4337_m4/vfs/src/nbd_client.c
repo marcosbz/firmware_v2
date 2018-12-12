@@ -26,45 +26,6 @@ if ( rc1 != ERR_OK || rc2 != ERR_OK )
  continue;
 }
 
-int main()
-{
-    struct netconn *conn;
-    struct netbuf *buf;
-    struct ip_addr addr;
-    char *data;
-    char text[] = "A static text";
-    int i;
-
-    /* create a new connection */
-    conn = netconn_new(NETCONN_UDP);
-
-    /* set up the IP address of the remote host */
-    addr.addr = htonl(0x0a000001);
-
-    /* connect the connection to the remote host */
-    netconn_connect(conn, addr, 7000);
-
-    /* create a new netbuf */
-    buf = netbuf_new();
-    data = netbuf_alloc(buf, 10);
-
-    /* create some arbitrary data */
-    for(i = 0; i < 10; i++)
-        data[i] = i;
-
-    /* send the arbitrary data */
-    netconn_send(conn, buf);
-
-    /* reference the text into the netbuf */
-    netbuf_ref(buf, text, sizeof(text));
-
-    /* send the text */
-    netconn_send(conn, buf);
-
-    /* deallocate connection and netbuf */
-    netconn_delete(conn);
-    netconn_delete(buf);
-}
 
 /*==================[macros and definitions]=================================*/
 #define NBD_BLOCKSIZE 512
@@ -191,15 +152,11 @@ int nbd_init(Nbd self)
 				configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY + 1UL),
 				(xTaskHandle *) NULL);
 
-	USB_Init(self->FlashDisk_MS_Interface->Config.PortNumber, USB_MODE_Host);
 	if( 0 == nbd_connect(self) )
 	{
 		self->status = NBD_STATUS_READY;
 		ret = 0;
 	}
-
-	return ret;
-	self->status = NBD_STATUS_UNINIT;
 
 	return ret;
 }
@@ -258,7 +215,7 @@ uint64_t htonll(uint64_t n)
 }
 
 
-int nbd_request_write(const uint8_t *data, uint32_t length, uint64_t offset)
+int nbd_request_write(struct netconn *conn, const uint8_t *data, uint32_t length, uint64_t offset)
 {
 	int ret = -1;
 	uint8_t nbd_header_buf[28];
@@ -280,7 +237,7 @@ int nbd_request_write(const uint8_t *data, uint32_t length, uint64_t offset)
 	return ret;
 }
 
-int nbd_request_read(uint8_t *data, uint32_t length, uint64_t offset)
+int nbd_request_read(struct netconn *conn, uint8_t *data, uint32_t length, uint64_t offset)
 {
 	int ret = -1;
 	uint8_t nbd_header_buf[28];
@@ -299,7 +256,30 @@ int nbd_request_read(uint8_t *data, uint32_t length, uint64_t offset)
 	return ret;
 }
 
-int parse_reply(uint8_t *reply_data, uint32_t data_length, uint32_t *reply_errno)
+int build_header(uint8_t *header, uint16_t request_type, uint64_t offset, uint32_t length)
+{
+	int ret = -1;
+	uint16_t command_flags = 0;
+	uint32_t nbd_request_magic = 0x25609513;
+	uint64_t handle = 0;
+
+	nbd_request_magic = htonl(nbd_request_magic);
+	command_flags = htons(command_flags);
+	request_type = htons(request_type);
+	handle = htonll(handle);
+	offset = htonll(offset);
+	length = htonl(length);
+	memcpy((void *)header, (void *)&nbd_request_magic, 4);
+	memcpy((void *)(header + 4), (void *)&command_flags, 2);
+	memcpy((void *)(header + 4 + 2), (void *)&request_type, 2);
+	memcpy((void *)(header + 4 + 2 + 2), (void *)&handle, 8);
+	memcpy((void *)(header + 4 + 2 + 2 + 8), (void *)&offset, 8);
+	memcpy((void *)(header + 4 + 2 + 2 + 8 + 8), (void *)&length, 4);
+	ret = 0;
+	return ret;
+}
+
+int parse_reply(struct netconn *conn, uint8_t *reply_data, uint32_t data_length, uint32_t *reply_errno)
 {
 	int ret = -1;
 	uint32_t reply_len, len, length_payload_remain, size_aux_copy;
@@ -363,34 +343,11 @@ int parse_reply(uint8_t *reply_data, uint32_t data_length, uint32_t *reply_errno
 	return ret;
 }
 
-int build_header(uint8_t *header, uint16_t request_type, uint64_t offset, uint32_t length)
-{
-	int ret = -1;
-	uint16_t command_flags = 0;
-	uint32_t nbd_request_magic = 0x25609513;
-	uint64_t handle = 0;
-
-	nbd_request_magic = htonl(nbd_request_magic);
-	command_flags = htons(command_flags);
-	request_type = htons(request_type);
-	handle = htonll(handle);
-	offset = htonll(offset);
-	length = htonl(length);
-	memcpy((void *)header, (void *)&nbd_request_magic, 4);
-	memcpy((void *)(header + 4), (void *)&command_flags, 2);
-	memcpy((void *)(header + 4 + 2), (void *)&request_type, 2);
-	memcpy((void *)(header + 4 + 2 + 2), (void *)&handle, 8);
-	memcpy((void *)(header + 4 + 2 + 2 + 8), (void *)&offset, 8);
-	memcpy((void *)(header + 4 + 2 + 2 + 8 + 8), (void *)&length, 4);
-	ret = 0;
-	return ret;
-}
-
 int nbd_blockErase(Nbd self, uint32_t start, uint32_t end)
 {
 	int ret = -1;
 	uint32_t i;
-	static const uint8_t zeroBlock[STORAGE_USB_BLOCKSIZE] = {0};
+	static const uint8_t zeroBlock[NBD_BLOCKSIZE] = {0};
 	if(start <= end && end < self->DiskCapacity.Blocks)
 	{
 		for(i = start; i <= end; i++)
