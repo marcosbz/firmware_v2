@@ -1,30 +1,32 @@
+#if 0
 struct netconn *xNetConn = NULL;
 
-struct ip_addr local_ip; 
-struct ip_addr remote_ip; 
-int rc1, rc2; 
- 
-xNetConn = netconn_new ( NETCONN_TCP ); 
- 
-if ( xNetConn == NULL ) { 
- 
+struct ip_addr local_ip;
+struct ip_addr remote_ip;
+int rc1, rc2;
+
+xNetConn = netconn_new ( NETCONN_TCP );
+
+if ( xNetConn == NULL ) {
+
  /* No memory for new connection? */
  continue;
 }
 
 local_ip.addr = <get IP of this device>
 
-rc1 = netconn_bind ( xNetConn, &local_ip, 0 ); 
- 
+rc1 = netconn_bind ( xNetConn, &local_ip, 0 );
+
 remote_ip.addr = xRemoteIp; // static or by netconn_gethostbyname ()
-rc2 = netconn_connect ( xNetConn, &remote_ip, cClientPort ); 
- 
+rc2 = netconn_connect ( xNetConn, &remote_ip, cClientPort );
+
 if ( rc1 != ERR_OK || rc2 != ERR_OK )
 {
 
   netconn_delete ( xNetConn );
  continue;
 }
+#endif
 
 
 /*==================[macros and definitions]=================================*/
@@ -46,6 +48,8 @@ ClassMembers( StorageUSB, Device )
 	struct netconn *conn;
 	struct netbuf *buf;
 	struct ip_addr addr;
+  uint64_t server_export_size;
+  uint16_t server_transmission_flags;
 	nbd_status_t status;
 
 EndOfClassMembers;
@@ -63,9 +67,21 @@ static int nbd_getState(Nbd self, blockDevState_t *state);
 static int nbd_getInfo(Nbd self, blockDevInfo_t *info);
 /*==================[internal data definition]===============================*/
 
-nbd_simple_reply_magic
-nbd_request_magic
-
+static const char * const string_nbd_nbdmagic = "NBDMAGIC";
+static const char * const string_nbd_ihaveopt = "IHAVEOPT";
+static const char * const string_nbd_flag_NBD_OPT_EXPORT_NAME = ""; /* Default export */
+static const uint32_t string_nbd_simple_reply_magic = 0x67446698;
+static const uint32_t string_nbd_request_magic = 0x25609513;
+static const uint16_t string_nbd_request_read = 0;
+static const uint16_t string_nbd_request_write = 1;
+static const uint16_t string_nbd_request_disconnect = 2;
+static const uint16_t string_nbd_request_flush = 3;
+/*
+READ = 0
+WRITE = 1
+DISCONNECT = 2
+FLUSH = 3
+*/
 /*==================[external data definition]===============================*/
 /** \brief Allocating the class description table and the vtable
 */
@@ -120,7 +136,11 @@ static void Nbd_constructor( Nbd self, const void *params )
 		/* TODO */
 	}
 	//self->FlashDisk_MS_Interface = &FlashDisk_MS_Interface0;
+  self->conn = NULL;
+  self->buf = NULL;
 	self->position = 0;
+  self->server_export_size = 0;
+  self->server_transmission_flags = 0;
 	self->status = NBD_STATUS_UNINIT;
 }
 /** \brief Destructor */
@@ -141,7 +161,7 @@ Nbd nbd_new(void)
 	nbd_constructor_params_t nbd_params;
 	return (Nbd) ooc_new(Nbd, (void *)&nbd_params);
 }
-usb_status_t nbd_getStatus(Nbd self)
+nbd_status_t nbd_getStatus(Nbd self)
 {
 	return self->status;
 }
@@ -209,27 +229,18 @@ int nbd_singleBlockWrite(Nbd self, const uint8_t *writeBlock, uint32_t sector)
 /*
 /* There are three message types in the transmission phase: the request, the simple reply, and the structured reply chunk. */
 
-uint64_t htonll(uint64_t n)
-{
-#if __BYTE_ORDER == __BIG_ENDIAN
-    return n; 
-#else
-    return (((uint64_t)htonl(n)) << 32) + htonl(n >> 32);
-#endif
-}
-
-
 int nbd_request_write(struct netconn *conn, const uint8_t *data, uint32_t length, uint64_t offset)
 {
 	int ret = -1;
 	uint8_t nbd_header_buf[28];
+  uint32_t reply_errno;
 
-	build_header(nbd_header_buf, nbd_request_write, offset, length);
+	build_header(nbd_header_buf, string_nbd_request_write, offset, length);
 	if(ERR_OK == netconn_write(conn, (void *)nbd_header_buf, 28, NETCONN_NOCOPY))
 	{
 		if(ERR_OK == netconn_write(conn, (void *)data, length, NETCONN_NOCOPY))
 		{
-			if(0 <= parse_reply(NULL, 0, &reply_errno))
+			if(0 <= parse_reply(conn, NULL, 0, &reply_errno))
 			{
 				if(0 == reply_errno)
 				{
@@ -246,10 +257,10 @@ int nbd_request_read(struct netconn *conn, uint8_t *data, uint32_t length, uint6
 	int ret = -1;
 	uint8_t nbd_header_buf[28];
 
-	build_header(nbd_packet_buf, nbd_request_read, offset, length);
+	build_header(nbd_packet_buf, string_nbd_request_read, offset, length);
 	if(ERR_OK == netconn_write(conn, (void *)nbd_packet_buf, 28, NETCONN_NOCOPY))
 	{
-		if(0 <= parse_reply(data, length, &reply_errno))
+		if(0 <= parse_reply(conn, data, length, &reply_errno))
 		{
 			if(0 == reply_errno)
 			{
@@ -264,10 +275,10 @@ int build_header(uint8_t *header, uint16_t request_type, uint64_t offset, uint32
 {
 	int ret = -1;
 	uint16_t command_flags = 0;
-	uint32_t nbd_request_magic = 0x25609513;
+	uint32_t nbd_request_magic;
 	uint64_t handle = 0;
 
-	nbd_request_magic = htonl(nbd_request_magic);
+	nbd_request_magic = htonl(string_nbd_request_magic);
 	command_flags = htons(command_flags);
 	request_type = htons(request_type);
 	handle = htonll(handle);
@@ -304,7 +315,7 @@ int parse_reply(struct netconn *conn, uint8_t *reply_data, uint32_t data_length,
 			*reply_errno = ntohl(*reply_errno);
 			reply_handle = ntohll(reply_handle);
 
-			if(nbd_simple_reply_magic == reply_magic)
+			if(string_nbd_simple_reply_magic == reply_magic)
 			{
 				if(NULL != reply_data)
 				{
@@ -516,9 +527,9 @@ static int nbd_connect(Nbd self)
 {
 	int ret = -1;
 
-	uint32_t buflen; 
+	uint32_t buflen;
 	uint8_t *buf;
-	
+
 	uint32_t string_nbd_flag_offset;
 
 	assert(ooc_isInstanceOf(self, Nbd));
@@ -632,4 +643,23 @@ static int nbd_getInfo(Nbd self, blockDevInfo_t *info)
 {
 	assert(ooc_isInstanceOf(self, Nbd));
 	return 0;
+}
+
+/* aux functions */
+uint64_t htonll(uint64_t n)
+{
+#if __BYTE_ORDER == __BIG_ENDIAN
+    return n;
+#else
+    return (((uint64_t)htonl(n)) << 32) + htonl(n >> 32);
+#endif
+}
+
+uint64_t ntohll(uint64_t n)
+{
+#if __BYTE_ORDER == __BIG_ENDIAN
+    return n;
+#else
+    return (((uint64_t)ntohl(n)) << 32) + ntohl(n >> 32);
+#endif
 }
