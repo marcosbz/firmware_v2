@@ -35,8 +35,8 @@
 
 /*==================[inlcusiones]============================================*/
 
-#include "sd_spi.h"   // <= su propio archivo de cabecera
-#include "sapi_spi.h"
+//#include "sd_spi.h"   // <= su propio archivo de cabecera
+//#include "sapi_spi.h"
 #include "sapi.h"     // <= Biblioteca sAPI
 #include "ff.h"       // <= Biblioteca FAT FS
 
@@ -46,8 +46,9 @@
 #include "fat.h"
 #include "ooc.h"
 #include "device.h"
-#include "mmcSPI.h"
+//#include "mmcSPI.h"
 #include "storageUSB.h"
+#include "nbdclient.h"
 
 /*==================[definiciones y macros]==================================*/
 
@@ -58,6 +59,7 @@
 uint8_t buffer[TEST_BUFFER_SIZE];
 
 /*==================[definiciones de datos externos]=========================*/
+DEBUG_PRINT_ENABLE;
 
 /** \brief Filesystem drivers declaration
  *
@@ -71,7 +73,7 @@ extern filesystem_driver_t fat_driver;
 
 static void test_fill_buffer(uint8_t *buffer, uint16_t size);
 static int test_check_buffer(uint8_t *buffer, uint16_t size);
-void task(void);
+void main_task(void);
 
 /*==================[declaraciones de funciones externas]====================*/
 
@@ -88,17 +90,23 @@ int main( void ){
    // Inicializar y configurar la plataforma
    boardConfig();
 
+   // UART for debug messages
+   debugPrintConfigUart( UART_USB, 115200 );
+   debugPrintlnString( "VFS con freeRTOS, sAPI y lwip." );
    // SPI configuration
    //spiConfig( SPI0 );
 
    // Inicializar el conteo de Ticks con resolución de 10ms,
    // con tickHook diskTickHook
-   tickConfig( 10, diskTickHook );
+   //tickConfig( 10, diskTickHook );
 
    // ------ PROGRAMA QUE ESCRIBE EN LA SD -------
-
-   task();
-   gpioWrite( LEDG, ON );
+   // Crear tarea en freeRTOS
+   xTaskCreate(main_task, (const char *)"myTask",configMINIMAL_STACK_SIZE*2,0,
+               tskIDLE_PRIORITY+1,0);
+   vTaskStartScheduler();
+   //gpioWrite( LEDG, ON );
+   //gpioWrite( DO0, ON );
 
    // ---------- REPETIR POR SIEMPRE --------------------------
    while( TRUE )
@@ -113,10 +121,11 @@ int main( void ){
 }
 
 /*==================[definiciones de funciones internas]=====================*/
-void task(void)
+void main_task(void)
 {
    //MmcSPI mmc0;
-   StorageUSB usb0;
+   //StorageUSB usb0;
+   //Nbd nbd0;
    filesystem_info_t *fs;
    file_desc_t *file0, *file1, *file2, *file3;
 
@@ -141,19 +150,20 @@ void task(void)
    //ooc_init_class(MmcSPI);
    ooc_init_class(StorageUSB);
    //mmc0 = mmcSPI_new(); if(NULL == mmc0) while(1);
-   usb0 = storageUSB_new(); if(NULL == usb0) while(1);
+   //usb0 = storageUSB_new(); if(NULL == usb0) while(1);
+   nbd0 = nbd_new(); if(NULL == nbd0) while(1);
    //ret = mmcSPI_init(mmc0); //if(ret < 0) while(1);
-   ret = storageUSB_init(usb0); //if(ret < 0) while(1);
+   ret = nbd_init(nbd0); //if(ret < 0) while(1);
    if(0 == ret)
    {
       // Turn ON LEDG if the write operation was successful
-      gpioWrite( LEDG, ON );
+      gpioWrite( DO4, ON );
    }
    else
    {
-         // Turn ON LEDR if the write operation was fail
-         gpioWrite( LEDR, ON );
-         while(1);
+      // Turn ON LEDR if the write operation was fail
+      gpioWrite( DO0, ON );
+      while(1);
    }
    //while(1);
 
@@ -171,12 +181,12 @@ void task(void)
    if(0 == ret)
    {
       // Turn ON LEDG if the write operation was successful
-      gpioWrite( LED2, ON );
+      gpioWrite( DO5, ON );
    }
    else
    {
       // Turn ON LEDR if the write operation was fail
-      gpioWrite( LED1, ON );
+      gpioWrite( DO0, ON );
       while(1);
    }
    //while(1);
@@ -247,8 +257,9 @@ void task(void)
    ret = test_check_buffer(buffer, TEST_BUFFER_SIZE); if(ret < 0) while(1);
    ret = vfs_close(&file3); if(ret < 0) while(1);
 
-   gpioWrite( LED3, ON );
-   gpioWrite( LED2, OFF );
+   gpioWrite( DO6, ON );
+   while(1);
+   //gpioWrite( LED2, OFF );
 }
 
 static void test_fill_buffer(uint8_t *buffer, uint16_t size)

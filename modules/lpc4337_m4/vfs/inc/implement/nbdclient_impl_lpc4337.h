@@ -87,7 +87,7 @@ typedef struct
 } nbd_constructor_params_t;
 
 
-ClassMembers( StorageUSB, Device )
+ClassMembers( Nbd, Device )
 
    struct netconn *conn;
    struct ip_addr remote_ip;
