@@ -39,6 +39,7 @@
 #include "lwip/init.h"
 #include "lwip/opt.h"
 #include "lwip/sys.h"
+#include "lwip/api.h"
 #include "lwip/memp.h"
 #include "lwip/tcpip.h"
 #include "lwip/ip_addr.h"
@@ -85,29 +86,6 @@ DEBUG_PRINT_ENABLE;
 // Prototipo de funcion de la tarea
 void myTask( void* taskParmPtr );
 
-/* Sets up system hardware */
-static void prvSetupHardware(void)
-{
-	//SystemCoreClockUpdate();
-	//Board_Init();
-	// ---------- CONFIGURACIONES ------------------------------
-	// Inicializar y configurar la plataforma
-	boardConfig();
-
-	// UART for debug messages
-	debugPrintConfigUart( UART_USB, 115200 );
-	debugPrintlnString( "Blinky con freeRTOS y sAPI." );
-
-//#if defined(lpc4337_m4)
-//	ciaaIOInit();
-//#endif
-
-	/* LED0 is used for the link status, on = PHY cable detected */
-	/* Initial LED state is off to show an unconnected cable state */
-	//Board_LED_Set(0, false);
-	gpioWrite( DO4, OFF );
-}
-
 /* Callback for TCPIP thread to indicate TCPIP init is done */
 static void tcpip_init_done_signal(void *arg)
 {
@@ -116,7 +94,7 @@ static void tcpip_init_done_signal(void *arg)
 }
 
 /* LWIP kickoff and PHY link monitor thread */
-static void vSetupIFTask (void *pvParameters) {
+static void vSetupIFTaskBis (void *pvParameters) {
 	ip_addr_t ipaddr, netmask, gw;
 	volatile s32_t tcpipdone = 0;
 	uint32_t physts;
@@ -160,7 +138,7 @@ static void vSetupIFTask (void *pvParameters) {
 #endif
 
 	/* Initialize and start application */
-	tcpecho_init();
+	//tcpecho_init();
 
 	/* This loop monitors the PHY link and will handle cable events
 	   via the PHY driver. */
@@ -218,7 +196,9 @@ static void vSetupIFTask (void *pvParameters) {
 										  (void *) &lpc_netif, 1);
 			}
 
-			DEBUGOUT("Link connect status: %d\r\n", ((physts & PHY_LINK_CONNECTED) != 0));
+			//DEBUGOUT("Link connect status: %d\r\n", ((physts & PHY_LINK_CONNECTED) != 0));
+			debugPrintString( "Link connect status: " ); debugPrintInt( ((physts & PHY_LINK_CONNECTED) != 0) );
+			debugPrintEnter();
 
 			/* Delay for link detection (250mS) */
 			vTaskDelay(configTICK_RATE_HZ / 4);
@@ -228,9 +208,12 @@ static void vSetupIFTask (void *pvParameters) {
 		if (!prt_ip) {
 			if (lpc_netif.ip_addr.addr) {
 				static char tmp_buff[16];
-				DEBUGOUT("IP_ADDR    : %s\r\n", ipaddr_ntoa_r((const ip_addr_t *) &lpc_netif.ip_addr, tmp_buff, 16));
-				DEBUGOUT("NET_MASK   : %s\r\n", ipaddr_ntoa_r((const ip_addr_t *) &lpc_netif.netmask, tmp_buff, 16));
-				DEBUGOUT("GATEWAY_IP : %s\r\n", ipaddr_ntoa_r((const ip_addr_t *) &lpc_netif.gw, tmp_buff, 16));
+				//DEBUGOUT("IP_ADDR    : %s\r\n", ipaddr_ntoa_r((const ip_addr_t *) &lpc_netif.ip_addr, tmp_buff, 16));
+				debugPrintString( "IP_ADDR    :" ); debugPrintlnString( ipaddr_ntoa_r((const ip_addr_t *) &lpc_netif.ip_addr, tmp_buff, 16) );
+				//DEBUGOUT("NET_MASK   : %s\r\n", ipaddr_ntoa_r((const ip_addr_t *) &lpc_netif.netmask, tmp_buff, 16));
+				debugPrintString( "NET_MASK   :" ); debugPrintlnString( ipaddr_ntoa_r((const ip_addr_t *) &lpc_netif.netmask, tmp_buff, 16) );
+				//DEBUGOUT("GATEWAY_IP : %s\r\n", ipaddr_ntoa_r((const ip_addr_t *) &lpc_netif.gw, tmp_buff, 16));
+				debugPrintString( "GATEWAY_IP :" ); debugPrintlnString( ipaddr_ntoa_r((const ip_addr_t *) &lpc_netif.gw, tmp_buff, 16) );
 				prt_ip = 1;
 			}
 		}
@@ -252,37 +235,6 @@ void msDelay(uint32_t ms)
 	vTaskDelay((configTICK_RATE_HZ * ms) / 1000);
 }
 
-/**
- * @brief	main routine for example_lwip_tcpecho_freertos_17xx40xx
- * @return	Function should not exit
- */
-int main(void)
-{
-	prvSetupHardware();
-
-   	// Crear tarea en freeRTOS
-	xTaskCreate(
-	        myTask,                     // Funcion de la tarea a ejecutar
-			  (const char *)"myTask",     // Nombre de la tarea como String amigable para el usuario
-					 configMINIMAL_STACK_SIZE*2, // Tama�o del stack de la tarea
-					 0,                          // Parametros de tarea
-					 tskIDLE_PRIORITY+1,         // Prioridad de la tarea
-					 0                           // Puntero a la tarea creada en el sistema
-	      );
-
-	/* Add another thread for initializing physical interface. This
-	   is delayed from the main LWIP initialization. */
-	xTaskCreate(vSetupIFTask, (signed char *) "SetupIFx",
-				configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY + 1UL),
-				(xTaskHandle *) NULL);
-
-	/* Start the scheduler */
-	vTaskStartScheduler();
-
-	/* Should never arrive here */
-	return 1;
-}
-
 // Implementacion de funcion de la tarea
 void myTask( void* taskParmPtr )
 {
@@ -298,6 +250,12 @@ void myTask( void* taskParmPtr )
       // Envia la tarea al estado bloqueado durante 500ms
 		vTaskDelay( 500 / portTICK_RATE_MS );
 	}
+}
+
+void vSetupIF(void)
+{
+	sys_thread_new("myTask", myTask, NULL, configMINIMAL_STACK_SIZE*2, tskIDLE_PRIORITY+1);
+	sys_thread_new("SetupIFxBis", vSetupIFTaskBis, NULL, configMINIMAL_STACK_SIZE*2, tskIDLE_PRIORITY+1);
 }
 
 /**

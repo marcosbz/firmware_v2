@@ -37,7 +37,13 @@
 
 //#include "sd_spi.h"   // <= su propio archivo de cabecera
 //#include "sapi_spi.h"
-#include "sapi.h"     // <= Biblioteca sAPI
+// Includes de FreeRTOS
+#include "FreeRTOS.h"
+#include "FreeRTOSConfig.h"
+#include "task.h"
+
+#include "sapi.h"        // <= sAPI header
+
 #include "ff.h"       // <= Biblioteca FAT FS
 
 #include <string.h>    /* <= string header */
@@ -73,7 +79,7 @@ extern filesystem_driver_t fat_driver;
 
 static void test_fill_buffer(uint8_t *buffer, uint16_t size);
 static int test_check_buffer(uint8_t *buffer, uint16_t size);
-void main_task(void);
+void main_task( void* taskParmPtr );
 
 /*==================[declaraciones de funciones externas]====================*/
 
@@ -89,6 +95,7 @@ int main( void ){
    // ---------- CONFIGURACIONES ------------------------------
    // Inicializar y configurar la plataforma
    boardConfig();
+   gpioWrite( DO4, OFF );
 
    // UART for debug messages
    debugPrintConfigUart( UART_USB, 115200 );
@@ -102,7 +109,7 @@ int main( void ){
 
    // ------ PROGRAMA QUE ESCRIBE EN LA SD -------
    // Crear tarea en freeRTOS
-   xTaskCreate(main_task, (const char *)"myTask",configMINIMAL_STACK_SIZE*2,0,
+   xTaskCreate(main_task, (const char *)"main_task",configMINIMAL_STACK_SIZE*2,0,
                tskIDLE_PRIORITY+1,0);
    vTaskStartScheduler();
    //gpioWrite( LEDG, ON );
@@ -121,11 +128,11 @@ int main( void ){
 }
 
 /*==================[definiciones de funciones internas]=====================*/
-void main_task(void)
+void main_task( void* taskParmPtr )
 {
    //MmcSPI mmc0;
    //StorageUSB usb0;
-   //Nbd nbd0;
+   Nbd nbd0;
    filesystem_info_t *fs;
    file_desc_t *file0, *file1, *file2, *file3;
 
@@ -169,7 +176,8 @@ void main_task(void)
 
    /* Create file system object with device and fs driver */
    //ret = filesystem_create(&fs, (Device *) &mmc0, &fat_driver); if(ret < 0) while(1);
-   ret = filesystem_create(&fs, (Device *) &usb0, &fat_driver); if(ret < 0) while(1);
+   //ret = filesystem_create(&fs, (Device *) &usb0, &fat_driver); if(ret < 0) while(1);
+   ret = filesystem_create(&fs, (Device *) &nbd0, &fat_driver); if(ret < 0) while(1);
 
    /* format */
    /* Set fat format parameters */
@@ -295,7 +303,7 @@ static int test_check_buffer(uint8_t *buffer, uint16_t size)
 
 // FUNCION que se ejecuta cada vezque ocurre un Tick
 bool_t diskTickHook( void *ptr ){
-   mmc_disk_timerproc();   // Disk timer process
+   //mmc_disk_timerproc();   // Disk timer process
    return 1;
 }
 

@@ -62,6 +62,10 @@
 #include "FreeRTOSConfig.h"
 #include "task.h"
 
+#include "lwip/sys.h"
+#include "lwip/api.h"
+#include "tcpecho.h"
+
 #include "sapi.h"        // <= sAPI header
 
 #include <string.h>
@@ -103,9 +107,9 @@ uint64_t htonll(uint64_t n);
 uint64_t ntohll(uint64_t n);
 
 /*==================[external data definition]===============================*/
+DEBUG_PRINT_ENABLE;
 /** \brief Allocating the class description table and the vtable
 */
-
 InterfaceRegister(Nbd)
 {
    AddInterface(Nbd, BlockDevice)
@@ -159,6 +163,7 @@ static void Nbd_constructor( Nbd self, const void *params )
    self->conn = NULL;
    IP4_ADDR(&(self->remote_ip),192,168,0,2);
    self->server_export_size = 0;
+   self->client_flags = 0;
    self->server_transmission_flags = 0;
    self->position = 0;
    self->status = NBD_STATUS_UNINIT;
@@ -188,18 +193,13 @@ nbd_status_t nbd_getStatus(Nbd self)
 int nbd_init(Nbd self)
 {
    int ret = -1;
-   uint8_t n;
 
    self->status = NBD_STATUS_UNINIT;
-   self->DiskCapacity.BlockSize = 512;
+   self->BlockSize = 512;
 
    // Crear tarea en freeRTOS
-   xTaskCreate(myTask, (const char *)"myTask",
-         configMINIMAL_STACK_SIZE*2,
-         0, tskIDLE_PRIORITY+1, 0);
-   xTaskCreate(vSetupIFTask, (signed char *) "SetupIFx",
-            configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY + 1UL),
-            (xTaskHandle *) NULL);
+   //sys_thread_new("SetupIFxBis", vSetupIFTaskBis, NULL, configMINIMAL_STACK_SIZE*2, tskIDLE_PRIORITY+1);
+   vSetupIF();
 
    if( 0 == nbd_connect(self) )
    {
@@ -218,9 +218,9 @@ int nbd_isInserted(Nbd self)
 int nbd_singleBlockRead(Nbd self, uint8_t *readBlock, uint32_t sector)
 {
    int ret = -1;
-   if(NBD_STATUS_READY == self->status && sector < self->DiskCapacity.Blocks)
+   if(NBD_STATUS_READY == self->status && sector < self->Blocks)
    {
-      if(0 == nbd_request_read(readBlock, self->DiskCapacity.BlockSize, sector * self->DiskCapacity.BlockSize))
+      if(0 == nbd_request_read(self->conn, readBlock, self->BlockSize, sector * self->BlockSize))
       {
          ret = 0;
       }
@@ -236,9 +236,9 @@ int nbd_singleBlockRead(Nbd self, uint8_t *readBlock, uint32_t sector)
 int nbd_singleBlockWrite(Nbd self, const uint8_t *writeBlock, uint32_t sector)
 {
    int ret = -1;
-   if(NBD_STATUS_READY == self->status && sector < self->DiskCapacity.Blocks)
+   if(NBD_STATUS_READY == self->status && sector < self->Blocks)
    {
-      if(0 == nbd_request_write(writeBlock, self->DiskCapacity.BlockSize, sector * self->DiskCapacity.BlockSize))
+      if(0 == nbd_request_write(self->conn, writeBlock, self->BlockSize, sector * self->BlockSize))
       {
          ret = 0;
       }
@@ -256,12 +256,11 @@ int nbd_blockErase(Nbd self, uint32_t start, uint32_t end)
    int ret = -1;
    uint32_t i;
    static const uint8_t zeroBlock[NBD_BLOCKSIZE] = {0};
-   if(start <= end && end < self->DiskCapacity.Blocks)
+   if(start <= end && end < self->Blocks)
    {
       for(i = start; i <= end; i++)
       {
-         if(MS_Host_WriteDeviceBlocks(self->FlashDisk_MS_Interface, 0, i, 1,
-         self->DiskCapacity.BlockSize, (void *)zeroBlock))
+         if(0 == nbd_singleBlockWrite(self, zeroBlock, i))
          {
             break;
          }
@@ -276,7 +275,7 @@ int nbd_blockErase(Nbd self, uint32_t start, uint32_t end)
 
 uint32_t nbd_getSize(Nbd self)
 {
-   return self->DiskCapacity.Blocks;
+   return self->Blocks;
 }
 
 /* BlockDevice interface implementation */
@@ -285,11 +284,11 @@ static ssize_t nbd_read(Nbd self, uint8_t * const buf, size_t const nbyte)
    ssize_t ret = -1;
    size_t bytes_left, bytes_read, i, sector, position, bytes_offset;
    assert(ooc_isInstanceOf(self, Nbd));
-   i=0; bytes_left = nbyte; sector = self->position / self->DiskCapacity.BlockSize; position = self->position;
+   i=0; bytes_left = nbyte; sector = self->position / self->BlockSize; position = self->position;
    while(bytes_left)
    {
-      bytes_offset = position % self->DiskCapacity.BlockSize;
-      bytes_read = (bytes_left > (self->DiskCapacity.BlockSize - bytes_offset)) ? (self->DiskCapacity.BlockSize - bytes_offset) : bytes_left;
+      bytes_offset = position % self->BlockSize;
+      bytes_read = (bytes_left > (self->BlockSize - bytes_offset)) ? (self->BlockSize - bytes_offset) : bytes_left;
       if(nbd_singleBlockRead(self, self->block_buf, sector) == 0)
       {
          memcpy(buf + i, self->block_buf + bytes_offset, bytes_read);
@@ -318,11 +317,11 @@ static ssize_t nbd_write(Nbd self, uint8_t const * const buf, size_t const nbyte
    ssize_t ret = -1;
    size_t bytes_left, bytes_write, i, sector, position, bytes_offset;
    assert(ooc_isInstanceOf(self, Nbd));
-   i=0; bytes_left = nbyte; sector = self->position / self->DiskCapacity.BlockSize; position = self->position;
+   i=0; bytes_left = nbyte; sector = self->position / self->BlockSize; position = self->position;
    while(bytes_left)
    {
-      bytes_offset = position % self->DiskCapacity.BlockSize;
-      bytes_write = bytes_left > (self->DiskCapacity.BlockSize - bytes_offset) ? (self->DiskCapacity.BlockSize - bytes_offset) : bytes_left;
+      bytes_offset = position % self->BlockSize;
+      bytes_write = bytes_left > (self->BlockSize - bytes_offset) ? (self->BlockSize - bytes_offset) : bytes_left;
       //printf("nbd_write(): bytes_left: %d bytes_write: %d sector: %d\n",
       // bytes_left, bytes_write, sector);
       if(nbd_singleBlockRead(self, self->block_buf, sector) == 0)
@@ -357,7 +356,7 @@ static ssize_t nbd_lseek(Nbd self, off_t const offset, uint8_t const whence)
 {
    assert(ooc_isInstanceOf(self, Nbd));
    off_t destination = -1;
-   size_t partition_size = self->DiskCapacity.BlockSize * self->DiskCapacity.Blocks;
+   size_t partition_size = self->BlockSize * self->Blocks;
    switch(whence)
    {
       case SEEK_END:
@@ -385,8 +384,8 @@ static int nbd_ioctl(Nbd self, int32_t request, void* param)
    switch(request)
    {
       case IOCTL_BLOCK_GETINFO:
-      blockInfo->size = self->DiskCapacity.BlockSize;
-      blockInfo->num = self->DiskCapacity.Blocks;
+      blockInfo->size = self->BlockSize;
+      blockInfo->num = self->Blocks;
       ret = 1;
       break;
       default:
@@ -418,7 +417,9 @@ static int nbd_connect(Nbd self)
    int ret = -1;
 
    struct netbuf *inbuf;
-   uint32_t buflen;
+   static const uint32_t export_name_length = 0;
+   static const uint32_t option_data_length = 0;
+   uint16_t buflen;
    uint8_t *buf;
 
    uint32_t string_nbd_flag_offset;
@@ -427,18 +428,18 @@ static int nbd_connect(Nbd self)
 
    /* Create a new TCP connection handle */
    self->conn = netconn_new(NETCONN_TCP);
-   if(NULL != conn)
+   if(NULL != self->conn)
    {
       /* Bind to port 80 (HTTP) with default IP address */
       if(ERR_OK == netconn_bind(self->conn, NULL, 10809))
       {
-         if(ERR_OK == netconn_connect(self->conn, self->remote_ip, 10809))
+         if(ERR_OK == netconn_connect(self->conn, &(self->remote_ip), 10809))
          {
             /*** ALREADY CONNECTED. BEGIN PROTOCOL ***/
             /* Read the data from the port, blocking if nothing yet there. */
             /* We assume the request is in one netbuf. */
             netbuf_delete(inbuf);
-            if (ERR_OK == netconn_recv(conn, &inbuf))
+            if (ERR_OK == netconn_recv(self->conn, &inbuf))
             {
             /* Read data from netbuf to the provided buffer. */
                netbuf_data(inbuf, (void**)&buf, &buflen);
@@ -449,11 +450,11 @@ static int nbd_connect(Nbd self)
                */
                if(string_nbd_flag_offset + 2 <= buflen)
                {
-                  self->server_flags = ntohs(*((uint16_t *)&buf[string_nbd_flag_offset]));
+                  self->handshake_flags = ntohs(*((uint16_t *)&buf[string_nbd_flag_offset]));
                   /*
                   S: 16 bits, handshake flags
                   */
-                  if(self->server_flags) /* Check handshake flags */
+                  if(self->handshake_flags) /* Check handshake flags */
                   {
                      /* Send 32 bits 0s */
                      /*
@@ -466,16 +467,16 @@ static int nbd_connect(Nbd self)
                         */
                         if(ERR_OK == netconn_write(self->conn, (void *)string_nbd_ihaveopt, strlen(string_nbd_ihaveopt), NETCONN_NOCOPY))
                         {
-                           memset(aux_string, '\0', 4); /* export_name_length = 0 */
+                           //memset(aux_string, '\0', 4); /* export_name_length = 0 */
                            /*
                            C: 32 bits, option
                            */
-                           if(ERR_OK == netconn_write(self->conn, (void *)aux_string, 4, NETCONN_NOCOPY))
+                           if(ERR_OK == netconn_write(self->conn, (void *)&export_name_length, 4, NETCONN_NOCOPY))
                            {
                               /*
                               C: 32 bits, length of option data (unsigned)
                               */
-                              if(ERR_OK == netconn_write(self->conn, (void *)aux_string, 4, NETCONN_NOCOPY))
+                              if(ERR_OK == netconn_write(self->conn, (void *)&option_data_length, 4, NETCONN_NOCOPY))
                               {
                                  /*
                                  C: any data needed for the chosen option, of length as specified above.
@@ -483,17 +484,17 @@ static int nbd_connect(Nbd self)
                                  if(ERR_OK == netconn_write(self->conn, (void *)string_nbd_flag_NBD_OPT_EXPORT_NAME, 0, NETCONN_NOCOPY))
                                  {
                                     netbuf_delete(inbuf);
-                                    if (ERR_OK == netconn_recv(conn, &inbuf))
+                                    if (ERR_OK == netconn_recv(self->conn, &inbuf))
                                     {
                                        netbuf_data(inbuf, (void**)&buf, &buflen);
                                        if(8 + 2 + 124 <= buflen) /* Size of the export 64bits + transmission flags 16 bits + 124bytes zeroes */
                                        {
                                           self->server_export_size = ntohll(*((uint64_t *)buf));
                                           self->server_transmission_flags = ntohs(*((uint16_t *)(buf + 8)));
-                                          self->DiskCapacity.Blocks = self->server_export_size / self->DiskCapacity.BlockSize;
+                                          self->Blocks = self->server_export_size / self->BlockSize;
                                           /* Handshake finished */
                                           self->status = NBD_STATUS_READY;
-                                          ret = 0
+                                          ret = 0;
                                        }
                                     }
                                  }
@@ -538,14 +539,13 @@ static int nbd_getInfo(Nbd self, blockDevInfo_t *info)
 
 /* aux functions */
 
-/*
 /* There are three message types in the transmission phase: the request, the simple reply, and the structured reply chunk. */
 
 int nbd_request_write(struct netconn *conn, const uint8_t *data, uint32_t length, uint64_t offset)
 {
    int ret = -1;
-   uint8_t nbd_header_buf[28];
    uint32_t reply_errno;
+   uint8_t nbd_header_buf[28];
 
    build_header(nbd_header_buf, string_nbd_request_write, offset, length);
    if(ERR_OK == netconn_write(conn, (void *)nbd_header_buf, 28, NETCONN_NOCOPY))
@@ -567,10 +567,11 @@ int nbd_request_write(struct netconn *conn, const uint8_t *data, uint32_t length
 int nbd_request_read(struct netconn *conn, uint8_t *data, uint32_t length, uint64_t offset)
 {
    int ret = -1;
+   uint32_t reply_errno;
    uint8_t nbd_header_buf[28];
 
-   build_header(nbd_packet_buf, string_nbd_request_read, offset, length);
-   if(ERR_OK == netconn_write(conn, (void *)nbd_packet_buf, 28, NETCONN_NOCOPY))
+   build_header(nbd_header_buf, string_nbd_request_read, offset, length);
+   if(ERR_OK == netconn_write(conn, (void *)nbd_header_buf, 28, NETCONN_NOCOPY))
    {
       if(0 <= parse_reply(conn, data, length, &reply_errno))
       {
@@ -609,15 +610,16 @@ int build_header(uint8_t *header, uint16_t request_type, uint64_t offset, uint32
 int parse_reply(struct netconn *conn, uint8_t *reply_data, uint32_t data_length, uint32_t *reply_errno)
 {
    int ret = -1;
-   uint32_t reply_len, len, length_payload_remain, size_aux_copy;
+   uint32_t reply_len, length_payload_remain, size_aux_copy;
+   uint16_t len; /* For use with netbuf_data() */
    uint8_t *data;
    uint32_t reply_magic;
    uint64_t reply_handle;
    struct netbuf *inbuf;
 
-   if (NULL != (inbuf = netconn_recv(conn)))
+   if (ERR_OK == netconn_recv(conn, &inbuf))
    {
-      netbuf_data(inbuf, &data, &len);
+      netbuf_data(inbuf, (void**)&data, &len);
       if(len >= 16)
       {
          memcpy((void *)&reply_magic, (void *)data, 4);
@@ -642,7 +644,7 @@ int parse_reply(struct netconn *conn, uint8_t *reply_data, uint32_t data_length,
                length_payload_remain -= size_aux_copy;
                while(length_payload_remain && netbuf_next(inbuf) >= 0)
                {
-                  netbuf_data(inbuf, &data, &len);
+                  netbuf_data(inbuf, (void **)&data, &len);
                   if(length_payload_remain < len)
                      size_aux_copy = length_payload_remain;
                   else

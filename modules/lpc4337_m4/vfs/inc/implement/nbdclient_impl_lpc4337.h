@@ -67,6 +67,7 @@
 
 #include <stdbool.h>
 #include "implement/device_impl_lpc4337.h"
+#include "lwip/ip.h"
 
 /*==================[cplusplus]==============================================*/
 #ifdef __cplusplus
@@ -81,18 +82,23 @@ extern "C" {
 
 /*==================[typedef]================================================*/
 
-/** \brief  */
-typedef struct
-{
-} nbd_constructor_params_t;
-
-
 ClassMembers( Nbd, Device )
 
    struct netconn *conn;
    struct ip_addr remote_ip;
+   uint16_t handshake_flags;
+   uint32_t client_flags;
    uint64_t server_export_size;
    uint16_t server_transmission_flags;
+
+   /* TODO: Block buffer for rx and another for tx? Single buffer for both? */
+   /* Cant read and write at the same time */
+   uint8_t block_buf[512];
+
+   /* BlockDevice */
+   uint16_t BlockSize;
+   uint32_t Blocks;
+   uint32_t position;
    nbd_status_t status;
 
 EndOfClassMembers;

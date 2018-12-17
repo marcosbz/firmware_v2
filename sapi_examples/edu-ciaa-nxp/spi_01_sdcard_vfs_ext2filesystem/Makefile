@@ -34,14 +34,25 @@
 PROJECT_NAME := $(notdir $(PROJECT))
 
 # Modules needed by the application
-PROJECT_MODULES := modules/$(TARGET)/sapi \
-                   modules/$(TARGET)/base \
-                   modules/$(TARGET)/board \
-                   modules/$(TARGET)/chip \
-                   modules/$(TARGET)/ooc \
+#PROJECT_MODULES := modules/$(TARGET)/sapi \
+#                   modules/$(TARGET)/base \
+#                   modules/$(TARGET)/board \
+#                   modules/$(TARGET)/chip \
+#                   modules/$(TARGET)/ooc \
+#                   modules/$(TARGET)/tlsf \
+#                   modules/$(TARGET)/vfs \
+#                   modules/$(TARGET)/lpcusblib \
+
+PROJECT_MODULES := modules/$(TARGET)/ooc \
                    modules/$(TARGET)/tlsf \
                    modules/$(TARGET)/vfs \
                    modules/$(TARGET)/lpcusblib \
+									 modules/$(TARGET)/sapi_rtos \
+									 modules/$(TARGET)/lwip \
+									 modules/$(TARGET)/freertos \
+									 modules/$(TARGET)/base \
+									 modules/$(TARGET)/board \
+									 modules/$(TARGET)/chip \
 
 # source files folder
 PROJECT_SRC_FOLDERS := $(PROJECT)/src

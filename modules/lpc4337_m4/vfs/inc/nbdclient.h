@@ -82,6 +82,7 @@ typedef enum
 /** \brief NBD device type */
 typedef enum
 {
+  NBD_TYPE_NEWSTYLE
 } nbd_devType_t;
 
 typedef struct

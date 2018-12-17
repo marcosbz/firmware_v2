@@ -1,4 +1,4 @@
-# Copyright 2018, Marcos Ziegler
+# Copyright 2016, Pablo Ridolfi
 # All rights reserved.
 #
 # This file is part of Workspace.
@@ -29,20 +29,27 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-vfs_PATH := modules/lpc4337_m4/vfs
+# application name
+PROJECT_NAME := $(notdir $(PROJECT))
 
-vfs_SRC_FILES += $(wildcard $(vfs_PATH)/src/*.c) \
-                 $(wildcard $(vfs_PATH)/src/fatfs/src/*.c) \
-                 $(wildcard $(vfs_PATH)/src/lwip_threads/*.c)
+# Modules needed by the application
+PROJECT_MODULES := modules/$(TARGET)/lwip \
+                   modules/$(TARGET)/sapi_rtos \
+                   modules/$(TARGET)/freertos \
+                   modules/$(TARGET)/base \
+                   modules/$(TARGET)/board \
+                   modules/$(TARGET)/chip
 
-vfs_SRC_FOLDERS += modules/lpc4337_m4/vfs/src \
-                   modules/lpc4337_m4/vfs/src/fatfs/src \
-									 modules/lpc4337_m4/vfs/src/lwip_threads
+ifeq ($(TARGET),lpc4337_m4)
+PROJECT_MODULES += modules/$(TARGET)/ciaa
+endif
 
-vfs_INC_FOLDERS += modules/lpc4337_m4/vfs/inc \
-                   modules/lpc4337_m4/vfs/inc/implement \
-                   modules/lpc4337_m4/vfs/inc/fatfs/inc \
-									 modules/lpc4337_m4/vfs/inc/lwip_threads
+# source files folder
+PROJECT_SRC_FOLDERS := $(PROJECT)/src
 
-# usb host symbol
-SYMBOLS += -DUSB_HOST_ONLY
+# header files folder
+PROJECT_INC_FOLDERS := $(PROJECT)/inc
+
+# source files
+PROJECT_C_FILES := $(wildcard $(PROJECT)/src/*.c)
+PROJECT_ASM_FILES := $(wildcard $(PROJECT)/src/*.S)
