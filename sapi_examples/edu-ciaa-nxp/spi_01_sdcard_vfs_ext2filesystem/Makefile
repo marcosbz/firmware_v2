@@ -43,16 +43,16 @@ PROJECT_NAME := $(notdir $(PROJECT))
 #                   modules/$(TARGET)/vfs \
 #                   modules/$(TARGET)/lpcusblib \
 
-PROJECT_MODULES := modules/$(TARGET)/ooc \
-                   modules/$(TARGET)/tlsf \
-                   modules/$(TARGET)/vfs \
+PROJECT_MODULES := modules/$(TARGET)/vfs \
                    modules/$(TARGET)/lpcusblib \
-									 modules/$(TARGET)/sapi_rtos \
-									 modules/$(TARGET)/lwip \
-									 modules/$(TARGET)/freertos \
-									 modules/$(TARGET)/base \
-									 modules/$(TARGET)/board \
-									 modules/$(TARGET)/chip \
+		   modules/$(TARGET)/sapi_rtos \
+		   modules/$(TARGET)/lwip \
+		   modules/$(TARGET)/freertos \
+		   modules/$(TARGET)/base \
+		   modules/$(TARGET)/board \
+		   modules/$(TARGET)/chip \
+                   modules/$(TARGET)/ooc \
+                   modules/$(TARGET)/tlsf \
 
 # source files folder
 PROJECT_SRC_FOLDERS := $(PROJECT)/src

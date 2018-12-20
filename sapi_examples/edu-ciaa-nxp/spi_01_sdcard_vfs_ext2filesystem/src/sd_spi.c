@@ -80,6 +80,7 @@ extern filesystem_driver_t fat_driver;
 static void test_fill_buffer(uint8_t *buffer, uint16_t size);
 static int test_check_buffer(uint8_t *buffer, uint16_t size);
 void main_task( void* taskParmPtr );
+void myTask2( void* taskParmPtr );
 
 /*==================[declaraciones de funciones externas]====================*/
 
@@ -109,8 +110,11 @@ int main( void ){
 
    // ------ PROGRAMA QUE ESCRIBE EN LA SD -------
    // Crear tarea en freeRTOS
-   xTaskCreate(main_task, (const char *)"main_task",configMINIMAL_STACK_SIZE*2,0,
+   xTaskCreate(myTask2, (const char *)"myTask2",configMINIMAL_STACK_SIZE,0,
                tskIDLE_PRIORITY+1,0);
+   xTaskCreate(main_task, (const char *)"main_task",configMINIMAL_STACK_SIZE*32,0,
+               tskIDLE_PRIORITY+1,0);
+
    vTaskStartScheduler();
    //gpioWrite( LEDG, ON );
    //gpioWrite( DO0, ON );
@@ -144,21 +148,28 @@ void main_task( void* taskParmPtr )
 
    /* init CIAA kernel and devices */
    //ciaak_start();
-   ret=vfs_init(); if(ret < 0) while(1);
-
+   gpioWrite( DO0, ON );
+   ret=vfs_init();
+   if(ret < 0)
+   {
+      debugPrintlnString( "vfs_init()" );
+      while(1);
+   }
    /* Basic test
     * This secuence test the basic operation of MMC device.
     * Open the device, get info block, erase a block and verify or cleared,
     * write a block, read this block and verify the data read is same as writed
     * finally close the device
     */
-
+   gpioWrite( DO1, ON );
    /* Create device and initialize it */
    //ooc_init_class(MmcSPI);
    ooc_init_class(StorageUSB);
+   //while(1);
    //mmc0 = mmcSPI_new(); if(NULL == mmc0) while(1);
    //usb0 = storageUSB_new(); if(NULL == usb0) while(1);
    nbd0 = nbd_new(); if(NULL == nbd0) while(1);
+   while(1);
    //ret = mmcSPI_init(mmc0); //if(ret < 0) while(1);
    ret = nbd_init(nbd0); //if(ret < 0) while(1);
    if(0 == ret)
@@ -172,7 +183,7 @@ void main_task( void* taskParmPtr )
       gpioWrite( DO0, ON );
       while(1);
    }
-   //while(1);
+   while(1);
 
    /* Create file system object with device and fs driver */
    //ret = filesystem_create(&fs, (Device *) &mmc0, &fat_driver); if(ret < 0) while(1);
@@ -297,6 +308,23 @@ static int test_check_buffer(uint8_t *buffer, uint16_t size)
    //printf( "test_assert_buffer(): OK, no differences\n");
    }
    return 0;
+}
+
+// Implementacion de funcion de la tarea
+void myTask2( void* taskParmPtr )
+{
+   // ---------- CONFIGURACIONES ------------------------------
+
+   // ---------- REPETIR POR SIEMPRE --------------------------
+	while(TRUE)
+   {
+      // Intercambia el estado del LEDB
+		//gpioToggle( LEDB );
+		gpioToggle( DO7 );
+
+      // Envia la tarea al estado bloqueado durante 500ms
+		vTaskDelay( 500 / portTICK_RATE_MS );
+	}
 }
 
 /*==================[definiciones de funciones externas]=====================*/

@@ -62,7 +62,7 @@ vpath %.a $(OUT_PATH)
 OSEK_OIL_FILE_PATH = $(PROJECT)/$(PROJECT_NAME).oil
 
 ifneq ($(wildcard $(OSEK_OIL_FILE_PATH)),)
-all: 
+all:
 	@echo "Build freeOSEK project..." 
 	@echo ""
 	@echo "Clean OSEK /gen folder..."
@@ -95,8 +95,8 @@ endif
 define makemod
 lib$(1).a: $(2)
 	@echo "*** archiving static library $(1) ***"
-	@$(CROSS_PREFIX)ar rcs $(OUT_PATH)/lib$(1).a $(addprefix $(OBJ_PATH)/,$(2))
-	@$(CROSS_PREFIX)size $(OUT_PATH)/lib$(1).a
+	$(CROSS_PREFIX)ar rcs $(OUT_PATH)/lib$(1).a $(addprefix $(OBJ_PATH)/,$(2))
+	$(CROSS_PREFIX)size $(OUT_PATH)/lib$(1).a
 endef
 
 $(foreach MOD,$(notdir $(PROJECT_MODULES)), $(eval $(call makemod,$(MOD),$(notdir $(patsubst %.c,%.o,$(patsubst %.S,%.o,$($(MOD)_SRC_FILES)))))))
@@ -113,9 +113,10 @@ $(foreach MOD,$(notdir $(PROJECT_MODULES)), $(eval $(call makemod,$(MOD),$(notdi
 
 -include $(wildcard $(OBJ_PATH)/*.d)
 
-$(PROJECT_NAME): $(foreach MOD,$(notdir $(PROJECT_MODULES)),lib$(MOD).a) $(PROJECT_OBJS)
+$(warning $(foreach MOD,$(notdir $(PROJECT_MODULES)),lib$(MOD).a) $(PROJECT_OBJS))
+$(warning PROJECT_NAME $(PROJECT_NAME))$(PROJECT_NAME): $(foreach MOD,$(notdir $(PROJECT_MODULES)),lib$(MOD).a) $(PROJECT_OBJS)
 	@echo "*** linking project $@ ***"
-	@$(CROSS_PREFIX)gcc $(LFLAGS) $(LD_FILE) -o $(OUT_PATH)/$(PROJECT_NAME).axf $(PROJECT_OBJ_FILES) $(SLAVE_OBJ_FILE) -L$(OUT_PATH) $(addprefix -l,$(notdir $(PROJECT_MODULES))) $(addprefix -L,$(EXTERN_LIB_FOLDERS)) $(addprefix -l,$(notdir $(EXTERN_LIBS)))
+	$(CROSS_PREFIX)gcc $(LFLAGS) $(LD_FILE) -o $(OUT_PATH)/$(PROJECT_NAME).axf $(PROJECT_OBJ_FILES) $(SLAVE_OBJ_FILE) -L$(OUT_PATH) $(addprefix -l,$(notdir $(PROJECT_MODULES))) $(addprefix -L,$(EXTERN_LIB_FOLDERS)) $(addprefix -l,$(notdir $(EXTERN_LIBS)))
 	@$(CROSS_PREFIX)size $(OUT_PATH)/$(PROJECT_NAME).axf
 	@$(CROSS_PREFIX)objcopy -v -O binary $(OUT_PATH)/$(PROJECT_NAME).axf $(OUT_PATH)/$(PROJECT_NAME).bin
 	@echo "*** post-build ***"
@@ -156,7 +157,7 @@ clean_all:
 
 openocd:
 	@echo "Starting OpenOCD for $(TARGET)..."
-	@openocd -f $(CFG_FILE)
+	@openocd -f $(CFG_FILE) -c "targets" -c "lpc4337.m4 configure -rtos auto"
 
 download: $(PROJECT_NAME)
 	@echo "Downloading $(PROJECT_NAME).bin to $(TARGET)..."
