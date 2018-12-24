@@ -46,6 +46,7 @@
 
 #include "ff.h"       // <= Biblioteca FAT FS
 
+#include <stdio.h>
 #include <string.h>    /* <= string header */
 #include "test_fs.h"  /* <= own header */
 #include "ext2.h"
@@ -101,6 +102,7 @@ int main( void ){
    // UART for debug messages
    debugPrintConfigUart( UART_USB, 115200 );
    debugPrintlnString( "VFS con freeRTOS, sAPI y lwip." );
+   //printf("Probando printf\n");
    // SPI configuration
    //spiConfig( SPI0 );
 
@@ -161,15 +163,16 @@ void main_task( void* taskParmPtr )
     * write a block, read this block and verify the data read is same as writed
     * finally close the device
     */
-   gpioWrite( DO1, ON );
+
    /* Create device and initialize it */
    //ooc_init_class(MmcSPI);
-   ooc_init_class(StorageUSB);
+   //ooc_init_class(StorageUSB);
+   ooc_init_class(Nbd);
    //while(1);
    //mmc0 = mmcSPI_new(); if(NULL == mmc0) while(1);
    //usb0 = storageUSB_new(); if(NULL == usb0) while(1);
    nbd0 = nbd_new(); if(NULL == nbd0) while(1);
-   while(1);
+   gpioWrite( DO1, ON );
    //ret = mmcSPI_init(mmc0); //if(ret < 0) while(1);
    ret = nbd_init(nbd0); //if(ret < 0) while(1);
    if(0 == ret)
@@ -180,7 +183,6 @@ void main_task( void* taskParmPtr )
    else
    {
       // Turn ON LEDR if the write operation was fail
-      gpioWrite( DO0, ON );
       while(1);
    }
    while(1);

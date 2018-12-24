@@ -102,13 +102,15 @@ static void vSetupIFTaskBis (void *pvParameters) {
 
 	/* Wait until the TCP/IP thread is finished before
 	   continuing or wierd things may happen */
-	LWIP_DEBUGF(LWIP_DBG_ON, ("Waiting for TCPIP thread to initialize...\n"));
+	//LWIP_DEBUGF(LWIP_DBG_ON, ("Waiting for TCPIP thread to initialize...\n"));
+	debugPrintlnString( "Waiting for TCPIP thread to initialize...\n" );
 	tcpip_init(tcpip_init_done_signal, (void *) &tcpipdone);
 	while (!tcpipdone) {
 		msDelay(1);
 	}
 
-	LWIP_DEBUGF(LWIP_DBG_ON, ("Starting LWIP TCP echo server...\n"));
+	//LWIP_DEBUGF(LWIP_DBG_ON, ("Starting LWIP TCP echo server...\n"));
+	debugPrintlnString( "Starting LWIP TCP echo server...\n" );
 
 	/* Static IP assignment */
 #if LWIP_DHCP
@@ -245,7 +247,7 @@ void myTask( void* taskParmPtr )
    {
       // Intercambia el estado del LEDB
 		//gpioToggle( LEDB );
-		gpioToggle( DO7 );
+		gpioToggle( DO6 );
 
       // Envia la tarea al estado bloqueado durante 500ms
 		vTaskDelay( 500 / portTICK_RATE_MS );
@@ -255,7 +257,7 @@ void myTask( void* taskParmPtr )
 void vSetupIF(void)
 {
 	sys_thread_new("myTask", myTask, NULL, configMINIMAL_STACK_SIZE*2, tskIDLE_PRIORITY+1);
-	sys_thread_new("SetupIFxBis", vSetupIFTaskBis, NULL, configMINIMAL_STACK_SIZE*2, tskIDLE_PRIORITY+1);
+	sys_thread_new("SetupIFxBis", vSetupIFTaskBis, NULL, configMINIMAL_STACK_SIZE*10, tskIDLE_PRIORITY+1);
 }
 
 /**

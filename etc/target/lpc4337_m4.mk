@@ -49,12 +49,12 @@ SYMBOLS += -DDEBUG -DCORE_M4 -D__USE_LPCOPEN -D__LPC43XX__ -D__CODE_RED \
 
 # Compilation flags
 CFLAGS  := -Wall -ggdb3 -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 \
-           -mfloat-abi=softfp -fdata-sections -ffunction-sections
+           -mfloat-abi=softfp -fdata-sections -ffunction-sections 
 
 # Linking flags
 LFLAGS  := -nostdlib -fno-builtin -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 \
            -mfloat-abi=softfp -Xlinker -Map=$(OUT_PATH)/$(PROJECT_NAME).map \
-			  -Wl,--gc-sections
+			  -Wl,--gc-sections -Wl,--undefined=uxTopUsedPriority
 
 # Linker scripts
 ifndef LINK_RAM

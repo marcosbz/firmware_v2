@@ -69,3 +69,5 @@ SYMBOLS += -DUSB_HOST_ONLY
 
 # standard libraries
 EXTERN_LIBS += c rdimon
+
+LFLAGS += --specs=rdimon.specs --specs=nano.specs

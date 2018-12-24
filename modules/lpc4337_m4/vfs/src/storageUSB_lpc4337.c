@@ -391,6 +391,7 @@ static ssize_t storageUSB_write(StorageUSB self, uint8_t const * const buf, size
             //printf("storageUSB_write(): write back succesfull. Next iteration\n");
             bytes_left -= bytes_write;
             i += bytes_write;
+            position += bytes_write;
             sector++;
          }
          else
@@ -403,7 +404,7 @@ static ssize_t storageUSB_write(StorageUSB self, uint8_t const * const buf, size
    {
 
       ret = i;
-      self->position += i;
+      self->position = position;
    }
    else
    {
