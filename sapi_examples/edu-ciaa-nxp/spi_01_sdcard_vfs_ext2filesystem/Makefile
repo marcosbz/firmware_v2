@@ -65,9 +65,10 @@ PROJECT_C_FILES := $(wildcard $(PROJECT)/src/*.c)
 PROJECT_ASM_FILES := $(wildcard $(PROJECT)/src/*.S)
 
 # usb host symbol
-SYMBOLS += -DUSB_HOST_ONLY
+#SYMBOLS += -DUSB_HOST_ONLY
 
 # standard libraries
-EXTERN_LIBS += c rdimon
+#EXTERN_LIBS += c rdimon newlib
 
-LFLAGS += --specs=rdimon.specs --specs=nano.specs
+#LFLAGS += --specs=rdimon.specs --specs=nano.specs --specs=nosys.specs
+LFLAGS += --specs=nosys.specs -lnosys

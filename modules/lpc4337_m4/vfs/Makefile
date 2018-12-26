@@ -46,3 +46,4 @@ vfs_INC_FOLDERS += modules/lpc4337_m4/vfs/inc \
 
 # usb host symbol
 SYMBOLS += -DUSB_HOST_ONLY
+LFLAGS += --specs=nosys.specs -lnosys

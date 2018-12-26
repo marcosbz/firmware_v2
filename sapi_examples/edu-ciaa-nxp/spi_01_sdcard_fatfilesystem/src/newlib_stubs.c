@@ -114,11 +114,7 @@ int _read(int file, char *ptr, int len) {
     case STDIN_FILENO:
         for (n = 0; n < len; n++) {
             char c;
-#if (!defined(lpc11u68))
         	Chip_UART_ReadBlocking(MYSTDIN, &c, 1);
-#else
-        	Chip_UARTN_ReadBlocking(MYSTDIN, &c, 1);
-#endif
             *ptr++ = c;
             num++;
         }
@@ -176,15 +172,16 @@ int _wait(int *status) {
 int _write(int file, char *ptr, int len) {
     int n;
     switch (file) {
-    	case STDERR_FILENO: /* stderr */
 	    case STDOUT_FILENO: /*stdout*/
 	        for (n = 0; n < len; n++) {
-#if (!defined(lpc11u68))
 	            Chip_UART_SendBlocking(MYSTDOUT, ptr, 1);
-#else
-	            Chip_UARTN_SendBlocking(MYSTDOUT, ptr, 1);
-#endif
 	            ptr++;
+	        }
+	        break;
+	    case STDERR_FILENO: /* stderr */
+	        for (n = 0; n < len; n++) {
+	        	Chip_UART_SendBlocking(MYSTDERR, ptr, 1);
+				ptr++;
 	        }
 	        break;
 	    default:
@@ -194,12 +191,12 @@ int _write(int file, char *ptr, int len) {
     return len;
 }
 
-int _kill(int pid, int sig)
-{
-   return 0;
+int _getpid(void) {
+  return 1;
 }
 
-int _getpid(void)
-{
-   return 1;
+int _kill(int pid, int sig) {
+  errno = EINVAL;
+  return -1;
 }
+

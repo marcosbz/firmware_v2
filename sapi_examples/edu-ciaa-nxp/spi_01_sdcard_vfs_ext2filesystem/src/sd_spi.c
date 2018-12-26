@@ -102,7 +102,6 @@ int main( void ){
    // UART for debug messages
    debugPrintConfigUart( UART_USB, 115200 );
    debugPrintlnString( "VFS con freeRTOS, sAPI y lwip." );
-   //printf("Probando printf\n");
    // SPI configuration
    //spiConfig( SPI0 );
 
