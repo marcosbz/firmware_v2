@@ -200,7 +200,7 @@ int nbd_init(Nbd self)
    // Crear tarea en freeRTOS
    //sys_thread_new("SetupIFxBis", vSetupIFTaskBis, NULL, configMINIMAL_STACK_SIZE*2, tskIDLE_PRIORITY+1);
    vSetupIF();
-   while(1);
+
    if( 0 == nbd_connect(self) )
    {
       self->status = NBD_STATUS_READY;
@@ -426,23 +426,40 @@ static int nbd_connect(Nbd self)
 
    assert(ooc_isInstanceOf(self, Nbd));
 
+   debugPrintlnString( "Enter nbd_connect" );
    /* Create a new TCP connection handle */
    self->conn = netconn_new(NETCONN_TCP);
    if(NULL != self->conn)
    {
+      debugPrintlnString( "OK netconn_new" );
       /* Bind to port 80 (HTTP) with default IP address */
       if(ERR_OK == netconn_bind(self->conn, NULL, 10809))
       {
+         debugPrintlnString( "OK netconn_bind" );
          if(ERR_OK == netconn_connect(self->conn, &(self->remote_ip), 10809))
          {
+            debugPrintlnString( "OK netconn_connect. Begin protocol" );
             /*** ALREADY CONNECTED. BEGIN PROTOCOL ***/
             /* Read the data from the port, blocking if nothing yet there. */
             /* We assume the request is in one netbuf. */
             netbuf_delete(inbuf);
             if (ERR_OK == netconn_recv(self->conn, &inbuf))
             {
+               int i;
             /* Read data from netbuf to the provided buffer. */
                netbuf_data(inbuf, (void**)&buf, &buflen);
+               debugPrintString("Bytes recibidos: ");debugPrintlnUInt(buflen);debugPrintEnter();
+               debugPrintlnString("Contenido:");
+               for(i=0; i<buflen;i++)
+               {
+                  if(0 == (i%16)) debugPrintEnter();
+                  debugPrintString("0x");
+                  debugPrintHex(buf[i],8);
+                  //debugPrintIntFormat(buf[i],HEX_FORMAT);
+                  debugPrintString(" ");
+               }
+               debugPrintEnter();
+
                string_nbd_flag_offset = strlen(string_nbd_nbdmagic) + strlen(string_nbd_ihaveopt);
                /*
                S: 64 bits, 0x4e42444d41474943 (ASCII 'NBDMAGIC') (as in the old style handshake)
@@ -454,6 +471,11 @@ static int nbd_connect(Nbd self)
                   /*
                   S: 16 bits, handshake flags
                   */
+                  debugPrintlnString("S:16 bits, handshake flags");
+                  debugPrintString("0x");
+                  debugPrintHex(self->handshake_flags,16);
+                  debugPrintEnter();
+
                   if(self->handshake_flags) /* Check handshake flags */
                   {
                      /* Send 32 bits 0s */
@@ -462,39 +484,71 @@ static int nbd_connect(Nbd self)
                      */
                      if(ERR_OK == netconn_write(self->conn, (void *)htonl(self->client_flags), 4, NETCONN_NOCOPY))
                      {
+                        debugPrintlnString("OK written client flags");
                         /*
                         C: 64 bits, 0x49484156454F5054 (ASCII 'IHAVEOPT') (note same newstyle handshake's magic number)
                         */
                         if(ERR_OK == netconn_write(self->conn, (void *)string_nbd_ihaveopt, strlen(string_nbd_ihaveopt), NETCONN_NOCOPY))
                         {
+                           debugPrintlnString("OK written IHAVEOPT");
                            //memset(aux_string, '\0', 4); /* export_name_length = 0 */
                            /*
                            C: 32 bits, option
                            */
                            if(ERR_OK == netconn_write(self->conn, (void *)&export_name_length, 4, NETCONN_NOCOPY))
                            {
+                              debugPrintlnString("OK written export name length");
                               /*
                               C: 32 bits, length of option data (unsigned)
                               */
                               if(ERR_OK == netconn_write(self->conn, (void *)&option_data_length, 4, NETCONN_NOCOPY))
                               {
+                                 debugPrintlnString("OK written option data length");
                                  /*
                                  C: any data needed for the chosen option, of length as specified above.
                                  */
                                  if(ERR_OK == netconn_write(self->conn, (void *)string_nbd_flag_NBD_OPT_EXPORT_NAME, 0, NETCONN_NOCOPY))
                                  {
+                                    debugPrintlnString("OK recv export name");
                                     netbuf_delete(inbuf);
+                                    /*
+                                    S: 64 bits, size of the export in bytes (unsigned)
+                                    S: 16 bits, transmission flags
+                                    S: 124 bytes, zeroes (reserved) (unless NBD_FLAG_C_NO_ZEROES was negotiated by the client)
+                                    */
                                     if (ERR_OK == netconn_recv(self->conn, &inbuf))
                                     {
+                                       int i;
+                                       debugPrintlnString("OK receive expsize, tx flags, zero padding");
                                        netbuf_data(inbuf, (void**)&buf, &buflen);
+                                       debugPrintString("Bytes recibidos: ");debugPrintlnUInt(buflen);
+                                       debugPrintlnString("Contenido:");
+                                       for(i=0; i<buflen;i++)
+                                       {
+                                          if(0 == (i%16)) debugPrintEnter();
+                                          debugPrintString("0x");
+                                          debugPrintHex(buf[i],8);
+                                          //debugPrintIntFormat(buf[i],HEX_FORMAT);
+                                          debugPrintString(" ");
+                                       }
+                                       debugPrintEnter();
+
                                        if(8 + 2 + 124 <= buflen) /* Size of the export 64bits + transmission flags 16 bits + 124bytes zeroes */
                                        {
+                                          debugPrintlnString("OK receive enough long data");
                                           self->server_export_size = ntohll(*((uint64_t *)buf));
+                                          debugPrintString("server_export_size: 0x");
+                                          debugPrintHex(self->server_export_size,64);
+                                          debugPrintEnter();
                                           self->server_transmission_flags = ntohs(*((uint16_t *)(buf + 8)));
+                                          debugPrintString("server_transmission_flags: 0x");
+                                          debugPrintHex(self->server_transmission_flags,16);
+                                          debugPrintEnter();
                                           self->Blocks = self->server_export_size / self->BlockSize;
                                           /* Handshake finished */
                                           self->status = NBD_STATUS_READY;
                                           ret = 0;
+                                          debugPrintlnString("OK FINISH INITIALIZATION");
                                        }
                                     }
                                  }
@@ -619,7 +673,20 @@ int parse_reply(struct netconn *conn, uint8_t *reply_data, uint32_t data_length,
 
    if (ERR_OK == netconn_recv(conn, &inbuf))
    {
+      int i;
       netbuf_data(inbuf, (void**)&data, &len);
+      debugPrintString("Bytes recibidos: ");debugPrintlnUInt(len);debugPrintEnter();
+      debugPrintlnString("Contenido:");
+      for(i=0; i<len;i++)
+      {
+         if(0 == (i%16)) debugPrintEnter();
+         debugPrintString("0x");
+         debugPrintHex(data[i],8);
+         //debugPrintIntFormat(data[i],HEX_FORMAT);
+         debugPrintString(" ");
+      }
+      debugPrintEnter();
+
       if(len >= 16)
       {
          memcpy((void *)&reply_magic, (void *)data, 4);
@@ -645,6 +712,18 @@ int parse_reply(struct netconn *conn, uint8_t *reply_data, uint32_t data_length,
                while(length_payload_remain && netbuf_next(inbuf) >= 0)
                {
                   netbuf_data(inbuf, (void **)&data, &len);
+                  debugPrintString("Bytes recibidos: ");debugPrintlnUInt(len);debugPrintEnter();
+                  debugPrintlnString("Contenido:");
+                  for(i=0; i<len;i++)
+                  {
+                     if(0 == (i%16)) debugPrintEnter();
+                     debugPrintString("0x");
+                     debugPrintHex(data[i],8);
+                     //debugPrintIntFormat(data[i],HEX_FORMAT);
+                     debugPrintString(" ");
+                  }
+                  debugPrintEnter();
+
                   if(length_payload_remain < len)
                      size_aux_copy = length_payload_remain;
                   else
