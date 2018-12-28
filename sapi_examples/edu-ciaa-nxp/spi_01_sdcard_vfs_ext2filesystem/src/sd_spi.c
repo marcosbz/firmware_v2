@@ -113,7 +113,7 @@ int main( void ){
    // Crear tarea en freeRTOS
    xTaskCreate(myTask2, (const char *)"myTask2",configMINIMAL_STACK_SIZE,0,
                tskIDLE_PRIORITY+1,0);
-   xTaskCreate(main_task, (const char *)"main_task",configMINIMAL_STACK_SIZE*32,0,
+   xTaskCreate(main_task, (const char *)"main_task",configMINIMAL_STACK_SIZE*28,0,
                tskIDLE_PRIORITY+1,0);
 
    vTaskStartScheduler();

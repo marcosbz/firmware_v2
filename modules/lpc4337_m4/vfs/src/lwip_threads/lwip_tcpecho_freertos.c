@@ -257,7 +257,7 @@ void myTask( void* taskParmPtr )
 void vSetupIF(void)
 {
 	sys_thread_new("myTask", myTask, NULL, configMINIMAL_STACK_SIZE*2, tskIDLE_PRIORITY+1);
-	sys_thread_new("SetupIFxBis", vSetupIFTaskBis, NULL, configMINIMAL_STACK_SIZE*2, tskIDLE_PRIORITY+1);
+	sys_thread_new("SetupIFxBis", vSetupIFTaskBis, NULL, configMINIMAL_STACK_SIZE*4, tskIDLE_PRIORITY+1);
 }
 
 /**

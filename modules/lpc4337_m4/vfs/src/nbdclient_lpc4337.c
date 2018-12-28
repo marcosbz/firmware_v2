@@ -200,7 +200,7 @@ int nbd_init(Nbd self)
    // Crear tarea en freeRTOS
    //sys_thread_new("SetupIFxBis", vSetupIFTaskBis, NULL, configMINIMAL_STACK_SIZE*2, tskIDLE_PRIORITY+1);
    vSetupIF();
-
+   //debugPrintlnString( "Finished creating tasks" );
    if( 0 == nbd_connect(self) )
    {
       self->status = NBD_STATUS_READY;

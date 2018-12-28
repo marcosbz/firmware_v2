@@ -65,7 +65,7 @@ PROJECT_C_FILES := $(wildcard $(PROJECT)/src/*.c)
 PROJECT_ASM_FILES := $(wildcard $(PROJECT)/src/*.S)
 
 # usb host symbol
-#SYMBOLS += -DUSB_HOST_ONLY
+SYMBOLS += -DUSB_HOST_ONLY -DLWIP_DEBUG
 
 # standard libraries
 #EXTERN_LIBS += c rdimon newlib
